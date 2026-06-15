@@ -12,11 +12,9 @@ const C = {
   green:   "#4CAF6E",
   red:     "#E05050",
   blue:    "#4A9EE0",
-  ms:      "#2F7BE8",  // Microsoft blue
 };
 
 const MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY || "";
-const MS_CLIENT_ID = import.meta.env.VITE_MS_CLIENT_ID || "";
 
 // ── State liquor law database ────────────────────────────────────────────────
 const STATE_LAWS = {
@@ -94,179 +92,6 @@ function loadGoogleMaps() {
   return mapsPromise;
 }
 
-// ── Microsoft MSAL-lite login (OAuth implicit/popup) ─────────────────────────
-async function msLoginPopup() {
-  const tenantId = "common";
-  const redirectUri = encodeURIComponent(window.location.origin);
-  const scope = encodeURIComponent("openid profile email User.Read");
-  const nonce = Math.random().toString(36).slice(2);
-  const url = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/authorize`
-    + `?client_id=${MS_CLIENT_ID}&response_type=token`
-    + `&redirect_uri=${redirectUri}&scope=${scope}&nonce=${nonce}&response_mode=fragment`;
-
-  return new Promise((resolve, reject) => {
-    const popup = window.open(url, "ms-login", "width=480,height=640,left=200,top=100");
-    const timer = setInterval(() => {
-      try {
-        if (!popup || popup.closed) { clearInterval(timer); reject(new Error("Popup closed")); return; }
-        const hash = popup.location.hash;
-        if (hash && hash.includes("access_token")) {
-          clearInterval(timer);
-          popup.close();
-          const params = new URLSearchParams(hash.slice(1));
-          resolve(params.get("access_token"));
-        }
-      } catch (_) { /* cross-origin, keep waiting */ }
-    }, 300);
-  });
-}
-
-async function fetchMsProfile(token) {
-  const r = await fetch("https://graph.microsoft.com/v1.0/me", {
-    headers: { Authorization: `Bearer ${token}` }
-  });
-  return r.json();
-}
-
-// ── Reverse geocode ───────────────────────────────────────────────────────────
-async function reverseGeocode(lat, lng) {
-  try {
-    const r = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
-      { headers: { "Accept-Language": "en" } }
-    );
-    const d = await r.json();
-    const stateCode = d?.address?.["ISO3166-2-lvl4"]?.replace("US-","") || null;
-    return { city: d?.address?.city || d?.address?.town || d?.address?.county || "", state: stateCode };
-  } catch { return null; }
-}
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-const inp = (active) => ({
-  width:"100%", background:"#161208", border:`1px solid ${active?C.amber:C.border}`,
-  borderRadius:10, padding:"10px 13px", color:C.cream, fontSize:14,
-  outline:"none", boxSizing:"border-box", transition:"border-color .2s",
-});
-const pill = (color) => ({
-  color, background:color+"18", border:`1px solid ${color}33`, borderRadius:20, padding:"3px 8px",
-});
-const avatarBox = {
-  width:40, height:40, borderRadius:"50%", background:"#2A2218",
-  border:`2px solid ${C.amber}`, display:"flex", alignItems:"center",
-  justifyContent:"center", fontSize:20, flexShrink:0,
-};
-
-function StarRow({ value, onChange }) {
-  return (
-    <div style={{display:"flex",gap:2}}>
-      {[1,2,3,4,5].map(n=>(
-        <span key={n} onClick={()=>onChange?.(n)}
-          style={{cursor:onChange?"pointer":"default",fontSize:20,color:n<=value?C.amber:"#3A3228"}}>★</span>
-      ))}
-    </div>
-  );
-}
-
-function LawBadges({ laws }) {
-  if (!laws) return null;
-  return (
-    <div style={{display:"flex",flexWrap:"wrap",gap:5,marginTop:6}}>
-      {laws.happyHour
-        ? <span style={{fontSize:10,fontWeight:700,...pill(C.green)}}>🍻 Happy Hour OK</span>
-        : <span style={{fontSize:10,fontWeight:700,...pill(C.red)}}>🚫 No Happy Hour</span>}
-      {laws.toGo==="permanent" && <span style={{fontSize:10,fontWeight:700,...pill(C.green)}}>🥡 To-Go (Permanent)</span>}
-      {laws.toGo==="temporary" && <span style={{fontSize:10,fontWeight:700,...pill(C.amber)}}>🥡 To-Go (Temp)</span>}
-      {!laws.toGo              && <span style={{fontSize:10,fontWeight:700,...pill(C.red)}}>🚫 No To-Go</span>}
-      {laws.delivery
-        ? <span style={{fontSize:10,fontWeight:700,...pill(C.blue)}}>🛵 Delivery OK</span>
-        : <span style={{fontSize:10,fontWeight:700,...pill(C.red)}}>🚫 No Delivery</span>}
-    </div>
-  );
-}
-
-// ── Microsoft Login Button ────────────────────────────────────────────────────
-function MsLoginButton({ onLogin }) {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-
-  async function handleLogin() {
-    if (!MS_CLIENT_ID) {
-      setError("Add VITE_MS_CLIENT_ID to .env to enable Microsoft login.");
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      const token = await msLoginPopup();
-      const profile = await fetchMsProfile(token);
-      onLogin({ token, profile });
-    } catch (e) {
-      setError("Login cancelled or failed.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <div>
-      <button onClick={handleLogin} disabled={loading} style={{
-        display:"flex", alignItems:"center", gap:10, width:"100%",
-        background:C.ms, color:"#fff", border:"none", borderRadius:12,
-        padding:"13px 16px", fontSize:14, fontWeight:700, cursor:"pointer",
-        opacity: loading?0.7:1, transition:"opacity .2s",
-      }}>
-        <svg width="18" height="18" viewBox="0 0 21 21" fill="none">
-          <rect x="1"  y="1"  width="9" height="9" fill="#F25022"/>
-          <rect x="11" y="1"  width="9" height="9" fill="#7FBA00"/>
-          <rect x="1"  y="11" width="9" height="9" fill="#00A4EF"/>
-          <rect x="11" y="11" width="9" height="9" fill="#FFB900"/>
-        </svg>
-        {loading ? "Signing in…" : "Continue with Microsoft"}
-      </button>
-      {error && <div style={{color:C.red,fontSize:12,marginTop:6}}>{error}</div>}
-    </div>
-  );
-}
-
-// ── Auth Screen ───────────────────────────────────────────────────────────────
-function AuthScreen({ onLogin, onGuest }) {
-  return (
-    <div style={{
-      minHeight:"100vh", background:C.bg, display:"flex", flexDirection:"column",
-      alignItems:"center", justifyContent:"center", padding:24,
-    }}>
-      <div style={{textAlign:"center",marginBottom:40}}>
-        <div style={{fontSize:60,marginBottom:12}}>🍺</div>
-        <div style={{color:C.amber,fontSize:38,fontWeight:900,letterSpacing:"-1.5px",lineHeight:1}}>
-          18<span style={{color:C.cream}}>Beers</span>
-        </div>
-        <div style={{color:C.muted,fontSize:14,marginTop:8}}>Check in. Drink up. Share the round.</div>
-      </div>
-
-      <div style={{width:"100%",maxWidth:360,display:"flex",flexDirection:"column",gap:12}}>
-        <MsLoginButton onLogin={onLogin} />
-
-        <div style={{display:"flex",alignItems:"center",gap:10,margin:"4px 0"}}>
-          <div style={{flex:1,height:1,background:C.border}}/>
-          <span style={{color:C.muted,fontSize:12}}>or</span>
-          <div style={{flex:1,height:1,background:C.border}}/>
-        </div>
-
-        <button onClick={onGuest} style={{
-          background:"none", border:`1px solid ${C.border}`, borderRadius:12,
-          padding:"13px 16px", color:C.muted, fontSize:14, fontWeight:600, cursor:"pointer",
-        }}>
-          Continue as Guest
-        </button>
-
-        <p style={{color:C.muted,fontSize:11,textAlign:"center",margin:0,lineHeight:1.5}}>
-          By continuing you agree to drink responsibly 🍻
-        </p>
-      </div>
-    </div>
-  );
-}
-
 // ── Google Map + Places bar finder ───────────────────────────────────────────
 function MapView({ lat, lng, bars, selectedBar, onSelectBar, userState }) {
   const mapRef = useRef(null);
@@ -342,7 +167,7 @@ function MapView({ lat, lng, bars, selectedBar, onSelectBar, userState }) {
 }
 
 // ── Bar detail sheet ──────────────────────────────────────────────────────────
-function BarSheet({ bar, laws, user, onClose, onCheckIn }) {
+function BarSheet({ bar, laws, onClose, onCheckIn }) {
   const posts = BAR_POSTS_STORE[bar.place_id] || [];
   const rating = bar.rating || "—";
   const laws2 = laws;
@@ -419,7 +244,7 @@ function BarSheet({ bar, laws, user, onClose, onCheckIn }) {
 }
 
 // ── Nearby Tab with real Google Maps ─────────────────────────────────────────
-function NearbyTab({ location, laws, user }) {
+function NearbyTab({ location, laws }) {
   const [mapsReady, setMapsReady] = useState(!!window.google?.maps);
   const [bars, setBars] = useState([]);
   const [loadingBars, setLoadingBars] = useState(false);
@@ -543,7 +368,7 @@ function NearbyTab({ location, laws, user }) {
 
       {selectedBar && (
         <BarSheet
-          bar={selectedBar} laws={laws} user={user}
+          bar={selectedBar} laws={laws}
           onClose={() => setSelectedBar(null)}
           onCheckIn={(bar) => { setSelectedBar(null); setCheckInBar(bar); }}
         />
@@ -557,7 +382,7 @@ function NearbyTab({ location, laws, user }) {
             BAR_POSTS_STORE[checkInBar.place_id].unshift(data);
             setCheckInBar(null);
           }}
-          location={location} laws={laws} user={user}
+          location={location} laws={laws}
           preselectedBar={checkInBar.name}
         />
       )}
@@ -566,7 +391,7 @@ function NearbyTab({ location, laws, user }) {
 }
 
 // ── Check-in modal ────────────────────────────────────────────────────────────
-function CheckInModal({ onClose, onPost, location, laws, user, preselectedBar }) {
+function CheckInModal({ onClose, onPost, location, laws, preselectedBar }) {
   const [beer,   setBeer]   = useState("");
   const [rating, setRating] = useState(0);
   const [bar,    setBar]    = useState(preselectedBar || "");
@@ -595,8 +420,8 @@ function CheckInModal({ onClose, onPost, location, laws, user, preselectedBar })
     if (!canPost) return;
     setPosted(true);
     const entry = {
-      user: user?.displayName || "Guest",
-      avatar: user ? "🧑‍💼" : "👤",
+      user: "You",
+      avatar: "🧔",
       beer, rating, bar, note,
       toGo, time: "Just now",
     };
@@ -761,7 +586,7 @@ function FeedCard({ post }) {
 }
 
 // ── Profile tab ───────────────────────────────────────────────────────────────
-function ProfileTab({ user, onLogout }) {
+function ProfileTab() {
   const stats = [{l:"Beers Logged",v:"47"},{l:"Bars Visited",v:"18"},{l:"Friends",v:"12"}];
   const badges = [
     {icon:"🍺",label:"First Pour",earned:true},{icon:"🏆",label:"18 Logged",earned:true},
@@ -773,19 +598,10 @@ function ProfileTab({ user, onLogout }) {
       <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,
         padding:"18px 16px",marginBottom:14,textAlign:"center"}}>
         <div style={{...avatarBox,width:60,height:60,fontSize:28,margin:"0 auto 10px"}}>
-          {user ? "🧑‍💼" : "👤"}
+          🧔
         </div>
-        <div style={{color:C.cream,fontWeight:800,fontSize:18}}>
-          {user?.displayName || "Guest"}
-        </div>
-        {user?.mail && <div style={{color:C.muted,fontSize:12,marginTop:2}}>{user.mail}</div>}
-        {user ? (
-          <button onClick={onLogout} style={{marginTop:10,background:"none",
-            border:`1px solid ${C.border}`,borderRadius:8,padding:"5px 14px",
-            color:C.muted,fontSize:12,cursor:"pointer"}}>Sign Out</button>
-        ) : (
-          <div style={{color:C.muted,fontSize:12,marginTop:4}}>Signed in as guest</div>
-        )}
+        <div style={{color:C.cream,fontWeight:800,fontSize:18}}>You</div>
+        <div style={{color:C.muted,fontSize:12,marginTop:2}}>@you</div>
         <div style={{display:"flex",justifyContent:"center",gap:28,marginTop:16}}>
           {stats.map(s=>(
             <div key={s.l} style={{textAlign:"center"}}>
@@ -877,8 +693,6 @@ const MOCK_FEED = [
 
 // ── Root app ──────────────────────────────────────────────────────────────────
 export default function App() {
-  const [user, setUser]             = useState(null);   // null = not logged in
-  const [authed, setAuthed]         = useState(false);  // has chosen guest or ms
   const [tab, setTab]               = useState("feed");
   const [feed, setFeed]             = useState(MOCK_FEED);
   const [showModal, setShowModal]   = useState(false);
@@ -908,18 +722,13 @@ export default function App() {
     );
   }, []);
 
-  useEffect(() => { if (authed) requestGPS(); }, [authed]);
-
-  function handleMsLogin({ profile }) {
-    setUser(profile);
-    setAuthed(true);
-  }
+  useEffect(() => { requestGPS(); }, []);
 
   function handlePost(data) {
     const post = {
       id: Date.now(),
-      user: user?.displayName || "Guest",
-      avatar: user ? "🧑‍💼" : "👤",
+      user: "You",
+      avatar: "🧔",
       state: location?.state || "??",
       city:  location?.city  || "",
       time:  "Just now",
@@ -929,13 +738,6 @@ export default function App() {
     setFeed(f => [post, ...f]);
     setTab("feed");
   }
-
-  if (!authed) return (
-    <AuthScreen
-      onLogin={handleMsLogin}
-      onGuest={() => setAuthed(true)}
-    />
-  );
 
   const TABS = [
     { key:"feed",   icon:"🍻", label:"Feed"    },
@@ -956,7 +758,7 @@ export default function App() {
           <div style={{color:C.amber,fontSize:25,fontWeight:900,letterSpacing:"-1px",lineHeight:1}}>
             18<span style={{color:C.cream}}>Beers</span>
           </div>
-          {user && <div style={{color:C.muted,fontSize:11,marginTop:1}}>Hey, {user.displayName?.split(" ")[0]} 👋</div>}
+          <div style={{color:C.muted,fontSize:11,marginTop:1}}>Check in. Drink up.</div>
         </div>
         <button onClick={()=>setShowModal(true)} style={{
           background:`linear-gradient(135deg,${C.amber},${C.amberLt})`,
@@ -994,8 +796,8 @@ export default function App() {
             {feed.map(p=><FeedCard key={p.id} post={p}/>)}
           </>
         )}
-        {tab==="nearby"  && <NearbyTab location={location} laws={laws} user={user}/>}
-        {tab==="profile" && <ProfileTab user={user} onLogout={()=>{setUser(null);setAuthed(false);}}/>}
+        {tab==="nearby"  && <NearbyTab location={location} laws={laws}/>}
+        {tab==="profile" && <ProfileTab/>}
       </div>
 
       {/* Bottom nav */}
@@ -1015,7 +817,7 @@ export default function App() {
 
       {showModal && (
         <CheckInModal onClose={()=>setShowModal(false)} onPost={handlePost}
-          location={location} laws={laws} user={user}/>
+          location={location} laws={laws}/>
       )}
       {showPicker && (
         <StatePickerModal
