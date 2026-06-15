@@ -14,7 +14,8 @@ const C = {
   blue:    "#4A9EE0",
 };
 
-const MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY || "";
+// Paste your Google Maps key here to enable the map, or set VITE_GOOGLE_MAPS_KEY in .env for Vite
+const MAPS_KEY = "";
 
 // ── State liquor law database ────────────────────────────────────────────────
 const STATE_LAWS = {
