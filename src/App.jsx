@@ -34,6 +34,36 @@ const pill = (color) => ({
   borderRadius:20, padding:"3px 8px",
 });
 
+// ── Reusable components ───────────────────────────────────────────────────────
+function StarRow({ value, onChange }) {
+  return (
+    <div style={{display:"flex",gap:2}}>
+      {[1,2,3,4,5].map(n=>(
+        <span key={n} onClick={()=>onChange?.(n)}
+          style={{cursor:onChange?"pointer":"default",fontSize:20,
+            color:n<=value?"#E8A020":"#3A3228"}}>★</span>
+      ))}
+    </div>
+  );
+}
+
+function LawBadges({ laws }) {
+  if (!laws) return null;
+  return (
+    <div style={{display:"flex",flexWrap:"wrap",gap:5,marginTop:6}}>
+      {laws.happyHour
+        ? <span style={{fontSize:10,fontWeight:700,...pill("#4CAF6E")}}>🍻 Happy Hour OK</span>
+        : <span style={{fontSize:10,fontWeight:700,...pill("#E05050")}}>🚫 No Happy Hour</span>}
+      {laws.toGo==="permanent" && <span style={{fontSize:10,fontWeight:700,...pill("#E8A020")}}>🥡 To-Go (Permanent)</span>}
+      {laws.toGo==="temporary" && <span style={{fontSize:10,fontWeight:700,...pill("#E8A020")}}>🥡 To-Go (Temp law)</span>}
+      {!laws.toGo              && <span style={{fontSize:10,fontWeight:700,...pill("#E05050")}}>🚫 No To-Go</span>}
+      {laws.delivery
+        ? <span style={{fontSize:10,fontWeight:700,...pill("#4A9EE0")}}>🛵 Delivery OK</span>
+        : <span style={{fontSize:10,fontWeight:700,...pill("#E05050")}}>🚫 No Delivery</span>}
+    </div>
+  );
+}
+
 // ── State liquor law database ────────────────────────────────────────────────
 const STATE_LAWS = {
   AL:{name:"Alabama",        happyHour:true,  toGo:false,         delivery:false},
