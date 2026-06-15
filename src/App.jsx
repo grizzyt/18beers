@@ -17,6 +17,23 @@ const C = {
 // Paste your Google Maps key here to enable the map, or set VITE_GOOGLE_MAPS_KEY in .env for Vite
 const MAPS_KEY = "";
 
+// ── Shared style helpers ─────────────────────────────────────────────────────
+const avatarBox = {
+  width:40, height:40, borderRadius:"50%", background:"#2A2218",
+  border:"2px solid #E8A020", display:"flex", alignItems:"center",
+  justifyContent:"center", fontSize:20, flexShrink:0,
+};
+const inp = (active) => ({
+  width:"100%", background:"#161208",
+  border:"1px solid " + (active ? "#E8A020" : "#2C2618"),
+  borderRadius:10, padding:"10px 13px", color:"#F0E8D4", fontSize:14,
+  outline:"none", boxSizing:"border-box", transition:"border-color .2s",
+});
+const pill = (color) => ({
+  color, background:color+"18", border:"1px solid "+color+"33",
+  borderRadius:20, padding:"3px 8px",
+});
+
 // ── State liquor law database ────────────────────────────────────────────────
 const STATE_LAWS = {
   AL:{name:"Alabama",        happyHour:true,  toGo:false,         delivery:false},
