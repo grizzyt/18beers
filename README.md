@@ -162,3 +162,25 @@ MIT — do whatever you want, just don't blame us if you drink too many.
 ---
 
 *Built with Claude · Inspired by 18Birdies · Powered by beer 🍺*
+
+---
+
+## 🔐 Microsoft Login Setup
+
+1. Go to [portal.azure.com](https://portal.azure.com)
+2. Navigate to **Azure Active Directory → App Registrations → New Registration**
+3. Name it `18Beers`, set Redirect URI to `http://localhost:5173` (Web platform)
+4. Under **Authentication**, enable **Access tokens** and **ID tokens**
+5. Copy the **Application (client) ID**
+6. Add it to `.env`: `VITE_MS_CLIENT_ID=your_client_id_here`
+
+---
+
+## 🗺️ Google Maps Setup
+
+1. Go to [console.cloud.google.com](https://console.cloud.google.com)
+2. Enable **Maps JavaScript API** and **Places API**
+3. Create an API key, restrict it to your domain for security
+4. Add it to `.env`: `VITE_GOOGLE_MAPS_KEY=your_key_here`
+
+The Nearby tab will then show real bars pulled from Google Places, with a dark-styled map and clickable pins showing community check-in counts per bar.
