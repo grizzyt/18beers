@@ -942,9 +942,11 @@ function FeedTab({ location, laws, currentUser, onCheckIn, onBarTap, onPostTap, 
             color:"#141210",border:"none",borderRadius:10,padding:"10px 20px",
             fontWeight:800,fontSize:14,cursor:"pointer"}}>Check In Now 🍺</button>
         </div>
-      ) : posts.map(p=>(
-        <FeedCard key={p.id} post={p} currentUser={currentUser} onBarTap={onBarTap} onPostTap={onPostTap}/>
-      ))}
+      ) : posts
+          .filter(p => filter === "all" || p.user_id === currentUser.id || (friendIds && friendIds.has(p.user_id)))
+          .map(p=>(
+          <FeedCard key={p.id} post={p} currentUser={currentUser} onBarTap={onBarTap} onPostTap={onPostTap} onUserTap={onUserTap}/>
+        ))}
     </div>
   );
 }
