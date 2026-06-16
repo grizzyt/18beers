@@ -1095,7 +1095,7 @@ function NearbyTab({ location, laws, currentUser, onBarTap }) {
 }
 
 // ── Profile tab ───────────────────────────────────────────────────────────────
-function ProfileTab({ currentUser, onLogout, onBarTap, onFriends, onUserTap }) {
+function ProfileTab({ currentUser, onLogout, onBarTap, onFriends, onUserTap, incomingCount=0 }) {
   const [posts,setPosts]     = useState([]);
   const [loading,setLoading] = useState(true);
   const [filter,setFilter]   = useState("all"); // "all" | "friends" 
@@ -1136,7 +1136,13 @@ function ProfileTab({ currentUser, onLogout, onBarTap, onFriends, onUserTap }) {
           <button onClick={onFriends}
             style={{background:`linear-gradient(135deg,${C.amber},${C.amberLt})`,
               color:"#141210",border:"none",borderRadius:8,padding:"7px 16px",
-              fontWeight:800,fontSize:12,cursor:"pointer"}}>🍻 Friends</button>
+              fontWeight:800,fontSize:12,cursor:"pointer",position:"relative",display:"inline-flex",
+              alignItems:"center",gap:6}}>
+            🍻 Friends
+            {incomingCount>0&&<span style={{background:C.red,color:"#fff",borderRadius:"50%",
+              width:18,height:18,display:"inline-flex",alignItems:"center",justifyContent:"center",
+              fontSize:10,fontWeight:800,flexShrink:0}}>{incomingCount}</span>}
+          </button>
           <button onClick={onLogout} style={{background:"none",
             border:`1px solid ${C.border}`,borderRadius:8,padding:"7px 16px",
             color:C.muted,fontSize:12,cursor:"pointer"}}>Sign Out</button>
@@ -1233,14 +1239,16 @@ const darkMapStyles = [
 export default function App() {
   const [session,setSession]         = useState(null);
   const [authLoading,setAuthLoading] = useState(true);
-  const [tab,setTab]                 = useState("feed");
+  const [tab,setTab]                 = useState(() => sessionStorage.getItem("18b_tab") || "feed");
   const [showModal,setShowModal]     = useState(false);
   const [showPicker,setShowPicker]   = useState(false);
-  const [location,setLocation]       = useState(null);
+  const [location,setLocation]       = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem("18b_loc") || "null"); } catch { return null; }
+  });
   const [barPage,setBarPage]         = useState(null);
   const [postPage,setPostPage]       = useState(null);
   const [friendsPage,setFriendsPage] = useState(false);
-  const [userPage,setUserPage]       = useState(null); // {id, display_name}
+  const [userPage,setUserPage]       = useState(null);
 
   const laws = location?.state ? STATE_LAWS[location.state] : null;
   const barLaws = barPage?.state ? STATE_LAWS[barPage.state] : laws;
@@ -1257,7 +1265,11 @@ export default function App() {
       async pos=>{
         const {latitude:lat,longitude:lng}=pos.coords;
         const geo=await reverseGeocode(lat,lng);
-        if (geo?.state&&STATE_LAWS[geo.state]) setLocation({...geo,lat,lng});
+        if (geo?.state&&STATE_LAWS[geo.state]) {
+          const loc = {...geo,lat,lng};
+          setLocation(loc);
+          sessionStorage.setItem("18b_loc", JSON.stringify(loc));
+        }
         else setShowPicker(true);
       },
       ()=>setShowPicker(true),
@@ -1313,14 +1325,14 @@ export default function App() {
       <div style={{flex:1,padding:"13px 13px 80px",overflowY:"auto"}}>
         {tab==="feed"    && <FeedTab location={location} laws={laws} currentUser={session.user} onCheckIn={()=>setShowModal(true)} onBarTap={handleBarTap} onPostTap={p=>setPostPage(p)} onUserTap={u=>setUserPage(u)} friendIds={friendIds}/>}
         {tab==="nearby"  && <NearbyTab location={location} laws={laws} currentUser={session.user} onBarTap={handleBarTap}/>}
-        {tab==="profile" && <ProfileTab currentUser={session.user} onLogout={()=>supabase.auth.signOut()} onBarTap={handleBarTap} onFriends={()=>setFriendsPage(true)} onUserTap={u=>setUserPage(u)}/>}
+        {tab==="profile" && <ProfileTab currentUser={session.user} onLogout={()=>supabase.auth.signOut()} onBarTap={handleBarTap} onFriends={()=>setFriendsPage(true)} onUserTap={u=>setUserPage(u)} incomingCount={incoming.length}/>}
       </div>
 
       <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",
         width:"100%",maxWidth:480,background:C.card,borderTop:`1px solid ${C.border}`,
         display:"flex",justifyContent:"space-around",padding:"9px 0 15px",zIndex:10}}>
         {TABS.map(t=>(
-          <button key={t.key} onClick={()=>setTab(t.key)}
+          <button key={t.key} onClick={()=>{ setTab(t.key); sessionStorage.setItem("18b_tab", t.key); }}
             style={{background:"none",border:"none",cursor:"pointer",
               display:"flex",flexDirection:"column",alignItems:"center",gap:3,padding:"0 18px"}}>
             <div style={{position:"relative",display:"inline-block"}}>
@@ -1378,7 +1390,14 @@ export default function App() {
       )}
       {showPicker && (
         <StatePickerModal
-          onSelect={code=>{setLocation(l=>({...l,state:code,city:""}));setShowPicker(false);}}
+          onSelect={code=>{
+            setLocation(l => {
+              const nl = {...(l||{}), state:code, city:""};
+              sessionStorage.setItem("18b_loc", JSON.stringify(nl));
+              return nl;
+            });
+            setShowPicker(false);
+          }}
           onClose={()=>setShowPicker(false)}/>
       )}
     </div>
@@ -1550,41 +1569,71 @@ function UserPage({ userId, displayName, currentUser, onBack, onBarTap, onPostTa
 
 // ── Friends hook ──────────────────────────────────────────────────────────────
 function useFriends(currentUser) {
-  const [friends, setFriends]         = useState([]); // accepted
-  const [incoming, setIncoming]       = useState([]); // pending requests TO me
-  const [outgoing, setOutgoing]       = useState([]); // pending requests FROM me
-  const [loading, setLoading]         = useState(true);
+  const [friends, setFriends]   = useState([]);
+  const [incoming, setIncoming] = useState([]);
+  const [outgoing, setOutgoing] = useState([]);
+  const [loading, setLoading]   = useState(true);
 
   const load = useCallback(async () => {
     if (!currentUser) return;
-    const { data } = await supabase
+
+    // Step 1: fetch raw friendship rows
+    const { data: rows } = await supabase
       .from("friendships")
-      .select("*, requester:requester_id(id,display_name:display_name), addressee:addressee_id(id,display_name:display_name)")
-      .or(`requester_id.eq.${currentUser.id},addressee_id.eq.${currentUser.id}`);
+      .select("*")
+      .or(`requester_id.eq.${currentUser.id},addressee_id.eq.${currentUser.id}`)
+      .neq("status", "declined");
 
-    const rows = data || [];
-    const accepted = rows.filter(r => r.status === "accepted");
-    const pend_in  = rows.filter(r => r.status === "pending" && r.addressee_id === currentUser.id);
-    const pend_out = rows.filter(r => r.status === "pending" && r.requester_id === currentUser.id);
+    if (!rows || rows.length === 0) {
+      setFriends([]); setIncoming([]); setOutgoing([]);
+      setLoading(false); return;
+    }
 
-    // Resolve the "other person" for each row
+    // Step 2: collect all other-user IDs and look up their profiles
+    const otherIds = [...new Set(rows.map(r =>
+      r.requester_id === currentUser.id ? r.addressee_id : r.requester_id
+    ))];
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, display_name")
+      .in("id", otherIds);
+
+    const nameMap = {};
+    (profiles || []).forEach(p => { nameMap[p.id] = p.display_name; });
+
+    // Step 3: resolve
     const resolve = (row) => {
       const isRequester = row.requester_id === currentUser.id;
+      const otherId = isRequester ? row.addressee_id : row.requester_id;
       return {
         friendshipId: row.id,
-        id:           isRequester ? row.addressee_id : row.requester_id,
-        display_name: isRequester ? row.addressee?.display_name : row.requester?.display_name,
+        id:           otherId,
+        display_name: nameMap[otherId] || "Unknown",
         status:       row.status,
       };
     };
 
+    const accepted  = rows.filter(r => r.status === "accepted");
+    const pend_in   = rows.filter(r => r.status === "pending" && r.addressee_id === currentUser.id);
+    const pend_out  = rows.filter(r => r.status === "pending" && r.requester_id === currentUser.id);
+
     setFriends(accepted.map(resolve));
-    setIncoming(pend_in.map(r => ({ friendshipId:r.id, id:r.requester_id, display_name:r.requester?.display_name })));
-    setOutgoing(pend_out.map(r => ({ friendshipId:r.id, id:r.addressee_id, display_name:r.addressee?.display_name })));
+    setIncoming(pend_in.map(resolve));
+    setOutgoing(pend_out.map(resolve));
     setLoading(false);
   }, [currentUser?.id]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Realtime: reload when any friendship involving this user changes
+  useEffect(() => {
+    if (!currentUser) return;
+    const channel = supabase.channel("friendships-live")
+      .on("postgres_changes", { event:"*", schema:"public", table:"friendships" },
+        () => load())
+      .subscribe();
+    return () => supabase.removeChannel(channel);
+  }, [currentUser?.id, load]);
 
   return { friends, incoming, outgoing, loading, reload: load };
 }
