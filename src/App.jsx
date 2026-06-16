@@ -461,15 +461,58 @@ function CheckInModal({ onClose, onPost, location, laws, currentUser, preselecte
   );
 }
 
+
+// ── Demo post seeder ──────────────────────────────────────────────────────────
+const DEMO_POSTS = [
+  { display_name:"Jake M.",   beer:"Goose Island IPA",      rating:4, bar_name:"The Rusty Anchor",  city:"Chicago",     state:"IL", note:"Perfect pour, super chill vibes tonight 🍺",              to_go:false },
+  { display_name:"Sara K.",   beer:"Modelo Especial",        rating:5, bar_name:"Lola's Cantina",    city:"Austin",      state:"TX", note:"$3 Modelos til 7 — happy hour is undefeated.",             to_go:false },
+  { display_name:"Derek P.",  beer:"Guinness Stout",         rating:5, bar_name:"O'Malley's Pub",    city:"Boston",      state:"MA", note:"Best Guinness outside Dublin. No debate.",                 to_go:false },
+  { display_name:"Mia R.",    beer:"Blue Moon",              rating:3, bar_name:"Rooftop 21",        city:"Nashville",   state:"TN", note:"Decent beer, incredible view. Worth it for the vibe.",     to_go:false },
+  { display_name:"Carlos V.", beer:"Dogfish Head 60 Min",    rating:5, bar_name:"Craft & Draft",     city:"Denver",      state:"CO", note:"Ordered this to go on the walk home. Love Colorado 🥡",   to_go:true  },
+  { display_name:"Priya S.",  beer:"Allagash White",         rating:5, bar_name:"The Taproom",       city:"Portland",    state:"ME", note:"This is my happy place. Every. Single. Time.",             to_go:false },
+  { display_name:"Marcus T.", beer:"Coors Banquet",          rating:4, bar_name:"Ziggy's Bar",       city:"Billings",    state:"MT", note:"Sometimes you just need a Banquet. No notes.",             to_go:false },
+  { display_name:"Emma L.",   beer:"Lagunitas IPA",          rating:4, bar_name:"The Back Bar",      city:"Seattle",     state:"WA", note:"Rainy night, great beer, good music. Solid combo.",        to_go:false },
+  { display_name:"Jake M.",   beer:"Three Floyds Zombie Dust",rating:5,bar_name:"The Rusty Anchor",  city:"Chicago",     state:"IL", note:"If you know you know. Best pale ale in the midwest.",      to_go:false },
+  { display_name:"Sara K.",   beer:"Lone Star",              rating:3, bar_name:"The White Horse",   city:"Austin",      state:"TX", note:"It's the national beer of Texas. You drink it. End of story.", to_go:false },
+  { display_name:"Priya S.",  beer:"Shipyard Pumpkinhead",   rating:2, bar_name:"Ri Ra Irish Pub",   city:"Portland",    state:"ME", note:"Fall beer season is a trap. Still drank the whole thing.",  to_go:false },
+  { display_name:"Marcus T.", beer:"Big Sky Moose Drool",    rating:5, bar_name:"The Fieldhouse",    city:"Missoula",    state:"MT", note:"Montana people don't mess around with their brown ales.",   to_go:true  },
+  { display_name:"Emma L.",   beer:"Fremont Lush IPA",       rating:5, bar_name:"Optimism Brewing",  city:"Seattle",     state:"WA", note:"Fresh hop season hits different up here. Unreal.",         to_go:false },
+  { display_name:"Derek P.",  beer:"Sam Adams Boston Lager", rating:4, bar_name:"Cheers Replica Bar",city:"Boston",      state:"MA", note:"Tourist trap but the beer is always cold and I respect it.",to_go:false },
+  { display_name:"Carlos V.", beer:"Breckenridge Avalanche", rating:4, bar_name:"My Brother's Bar",  city:"Denver",      state:"CO", note:"Oldest bar in Denver. Order the Avalanche. Trust me.",      to_go:false },
+];
+
+async function seedDemoPosts() {
+  // Use a fake UUID for demo user — posts will show but not be editable
+  const demoUserId = "00000000-0000-0000-0000-000000000001";
+  const rows = DEMO_POSTS.map((p, i) => ({
+    ...p,
+    user_id: demoUserId,
+    likes: Math.floor(Math.random() * 40) + 2,
+    place_id: null,
+    created_at: new Date(Date.now() - (i * 18 * 60 * 1000)).toISOString(), // staggered times
+  }));
+  await supabase.from("posts").insert(rows);
+}
+
 // ── Feed tab ──────────────────────────────────────────────────────────────────
 function FeedTab({ location, laws, currentUser, onCheckIn }) {
   const [posts, setPosts]     = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Initial load
+    // Initial load — seed demo posts if DB is empty
     supabase.from("posts").select("*").order("created_at", { ascending: false }).limit(50)
-      .then(({ data }) => { if (data) setPosts(data); setLoading(false); });
+      .then(async ({ data }) => {
+        if (data && data.length === 0) {
+          await seedDemoPosts();
+          const { data: seeded } = await supabase.from("posts").select("*")
+            .order("created_at", { ascending: false }).limit(50);
+          if (seeded) setPosts(seeded);
+        } else if (data) {
+          setPosts(data);
+        }
+        setLoading(false);
+      });
 
     // Realtime subscription
     const channel = supabase.channel("posts-feed")
