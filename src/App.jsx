@@ -1095,7 +1095,7 @@ function NearbyTab({ location, laws, currentUser, onBarTap }) {
 }
 
 // ── Profile tab ───────────────────────────────────────────────────────────────
-function ProfileTab({ currentUser, onLogout, onBarTap, onFriends }) {
+function ProfileTab({ currentUser, onLogout, onBarTap, onFriends, onUserTap }) {
   const [posts,setPosts]     = useState([]);
   const [loading,setLoading] = useState(true);
   const [filter,setFilter]   = useState("all"); // "all" | "friends" 
@@ -1313,7 +1313,7 @@ export default function App() {
       <div style={{flex:1,padding:"13px 13px 80px",overflowY:"auto"}}>
         {tab==="feed"    && <FeedTab location={location} laws={laws} currentUser={session.user} onCheckIn={()=>setShowModal(true)} onBarTap={handleBarTap} onPostTap={p=>setPostPage(p)} onUserTap={u=>setUserPage(u)} friendIds={friendIds}/>}
         {tab==="nearby"  && <NearbyTab location={location} laws={laws} currentUser={session.user} onBarTap={handleBarTap}/>}
-        {tab==="profile" && <ProfileTab currentUser={session.user} onLogout={()=>supabase.auth.signOut()} onBarTap={handleBarTap} onFriends={()=>setFriendsPage(true)}/>}
+        {tab==="profile" && <ProfileTab currentUser={session.user} onLogout={()=>supabase.auth.signOut()} onBarTap={handleBarTap} onFriends={()=>setFriendsPage(true)} onUserTap={u=>setUserPage(u)}/>}
       </div>
 
       <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",
@@ -1339,7 +1339,7 @@ export default function App() {
 
       {/* Friends page */}
       {friendsPage && (
-        <FriendsPage currentUser={session.user} onBack={()=>{ setFriendsPage(false); reloadFriends(); }}/>
+        <FriendsPage currentUser={session.user} onBack={()=>{ setFriendsPage(false); reloadFriends(); }} onUserTap={u=>setUserPage(u)}/>
       )}
 
       {/* User profile page */}
@@ -1537,7 +1537,7 @@ function UserPage({ userId, displayName, currentUser, onBack, onBarTap, onPostTa
         ) : posts.map(p => (
           <FeedCard key={p.id} post={p} currentUser={currentUser}
             onBarTap={onBarTap} onPostTap={onPostTap}
-            onUserTap={null}/>
+            onUserTap={onUserTap}/>
         ))}
       </div>
     </div>
@@ -1601,7 +1601,7 @@ async function searchUsers(query, currentUserId) {
 }
 
 // ── Friends page ──────────────────────────────────────────────────────────────
-function FriendsPage({ currentUser, onBack }) {
+function FriendsPage({ currentUser, onBack, onUserTap }) {
   const { friends, incoming, outgoing, loading, reload } = useFriends(currentUser);
   const [tab, setTab]         = useState("friends"); // friends | requests | find
   const [query, setQuery]     = useState("");
@@ -1709,8 +1709,10 @@ function FriendsPage({ currentUser, onBack }) {
             <div key={f.id} style={{background:C.card,border:`1px solid ${C.border}`,
               borderRadius:12,padding:"12px 14px",marginBottom:9,
               display:"flex",alignItems:"center",gap:12}}>
-              <InitialsAvatar name={f.display_name} size={40}/>
-              <div style={{flex:1}}>
+              <div onClick={()=>onUserTap?.({id:f.id,display_name:f.display_name})} style={{cursor:"pointer"}}>
+                <InitialsAvatar name={f.display_name} size={40}/>
+              </div>
+              <div style={{flex:1,cursor:"pointer"}} onClick={()=>onUserTap?.({id:f.id,display_name:f.display_name})}>
                 <div style={{color:C.cream,fontWeight:700,fontSize:14}}>{f.display_name||"Unknown"}</div>
                 <div style={{color:C.muted,fontSize:11,marginTop:2}}>🍺 Friend</div>
               </div>
@@ -1735,8 +1737,10 @@ function FriendsPage({ currentUser, onBack }) {
                   <div key={f.id} style={{background:C.card,border:`1px solid ${C.border}`,
                     borderRadius:12,padding:"12px 14px",marginBottom:9,
                     display:"flex",alignItems:"center",gap:12}}>
-                    <InitialsAvatar name={f.display_name} size={40}/>
-                    <div style={{flex:1}}>
+                    <div onClick={()=>onUserTap?.({id:f.id,display_name:f.display_name})} style={{cursor:"pointer"}}>
+                      <InitialsAvatar name={f.display_name} size={40}/>
+                    </div>
+                    <div style={{flex:1,cursor:"pointer"}} onClick={()=>onUserTap?.({id:f.id,display_name:f.display_name})}>
                       <div style={{color:C.cream,fontWeight:700,fontSize:14}}>{f.display_name||"Someone"}</div>
                       <div style={{color:C.muted,fontSize:11,marginTop:2}}>wants to be friends</div>
                     </div>
