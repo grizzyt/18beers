@@ -15,7 +15,7 @@ const C = {
   blue:    "#4A9EE0",
 };
 
-const MAPS_KEY = "";
+const MAPS_KEY = "AIzaSyC9eQ826QANnf_GvuRVRQLIBceKmfrHicE";
 
 // ── Shared style helpers ──────────────────────────────────────────────────────
 const avatarBox = {
