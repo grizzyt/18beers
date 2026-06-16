@@ -270,7 +270,7 @@ function AuthScreen() {
 }
 
 // ── Bar Page (full-screen) ────────────────────────────────────────────────────
-function BarPage({ barName, placeId, laws, currentUser, location, onBack, onPostTap }) {
+function BarPage({ barName, placeId, laws, currentUser, location, onBack, onPostTap, onUserTap }) {
   const [posts, setPosts]       = useState([]);
   const [loading, setLoading]   = useState(true);
   const [sortBy, setSortBy]     = useState("likes"); // "likes" | "recent"
@@ -393,7 +393,7 @@ function BarPage({ barName, placeId, laws, currentUser, location, onBack, onPost
             </button>
           </div>
         ) : sorted.map(post=>(
-          <BarPostCard key={post.id} post={post} currentUser={currentUser} onPostTap={onPostTap}/>
+          <BarPostCard key={post.id} post={post} currentUser={currentUser} onPostTap={onPostTap} onUserTap={onUserTap}/>
         ))}
       </div>
 
@@ -409,7 +409,7 @@ function BarPage({ barName, placeId, laws, currentUser, location, onBack, onPost
 }
 
 // ── Comment thread ────────────────────────────────────────────────────────────
-function CommentThread({ postId, currentUser }) {
+function CommentThread({ postId, currentUser, onUserTap }) {
   const [comments, setComments] = useState([]);
   const [body, setBody]         = useState("");
   const [loading, setLoading]   = useState(true);
@@ -453,7 +453,8 @@ function CommentThread({ postId, currentUser }) {
           <div style={{flex:1,background:"#161208",borderRadius:10,padding:"7px 10px",
             border:`1px solid ${C.border}`}}>
             <div style={{display:"flex",alignItems:"baseline",gap:6,marginBottom:3}}>
-              <span style={{color:C.cream,fontWeight:700,fontSize:12}}>{c.display_name}</span>
+              <span onClick={()=>onUserTap?.({id:c.user_id,display_name:c.display_name})}
+                style={{color:C.cream,fontWeight:700,fontSize:12,cursor:"pointer"}}>{c.display_name}</span>
               <span style={{color:C.muted,fontSize:10}}>{timeAgo(c.created_at)}</span>
             </div>
             <div style={{color:C.cream,fontSize:13,lineHeight:1.4}}>{c.body}</div>
@@ -545,7 +546,7 @@ function PostActions({ post, currentUser, showComments, onToggleComments }) {
 }
 
 // ── Bar post card (used inside BarPage) ───────────────────────────────────────
-function BarPostCard({ post, currentUser, onPostTap }) {
+function BarPostCard({ post, currentUser, onPostTap, onUserTap }) {
   return (
     <div onClick={()=>onPostTap?.(post)}
       style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,
@@ -580,7 +581,7 @@ function BarPostCard({ post, currentUser, onPostTap }) {
 
 
 // ── Post detail page ──────────────────────────────────────────────────────────
-function PostPage({ post, currentUser, onBack, onBarTap }) {
+function PostPage({ post, currentUser, onBack, onBarTap, onUserTap }) {
   const laws = post.state ? STATE_LAWS[post.state] : null;
 
   return (
@@ -604,9 +605,12 @@ function PostPage({ post, currentUser, onBack, onBarTap }) {
 
           {/* Author row */}
           <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
-            <InitialsAvatar name={post.display_name} size={44}/>
+            <div onClick={()=>onUserTap?.({id:post.user_id,display_name:post.display_name})} style={{cursor:"pointer"}}>
+              <InitialsAvatar name={post.display_name} size={44}/>
+            </div>
             <div style={{flex:1}}>
-              <div style={{color:C.cream,fontWeight:800,fontSize:15}}>{post.display_name||"Someone"}</div>
+              <div onClick={()=>onUserTap?.({id:post.user_id,display_name:post.display_name})}
+                style={{color:C.cream,fontWeight:800,fontSize:15,cursor:"pointer"}}>{post.display_name||"Someone"}</div>
               <div style={{marginTop:3}}>
                 <button onClick={()=>onBarTap?.(post)}
                   style={{background:"none",border:"none",padding:0,cursor:"pointer",
@@ -658,14 +662,14 @@ function PostPage({ post, currentUser, onBack, onBarTap }) {
         {/* Comments section */}
         <div style={{color:C.muted,fontSize:11,fontWeight:700,letterSpacing:".06em",
           textTransform:"uppercase",marginBottom:10}}>Comments</div>
-        <CommentThread postId={post.id} currentUser={currentUser} alwaysOpen/>
+        <CommentThread postId={post.id} currentUser={currentUser} onUserTap={onUserTap} alwaysOpen/>
       </div>
     </div>
   );
 }
 
 // ── Feed card — tap to open PostPage ─────────────────────────────────────────
-function FeedCard({ post, currentUser, onBarTap, onPostTap }) {
+function FeedCard({ post, currentUser, onBarTap, onPostTap, onUserTap }) {
   const laws = post.state ? STATE_LAWS[post.state] : null;
 
   return (
@@ -674,9 +678,13 @@ function FeedCard({ post, currentUser, onBarTap, onPostTap }) {
         padding:14,marginBottom:11,cursor:"pointer"}}>
 
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
-        <InitialsAvatar name={post.display_name} size={40}/>
+        <div onClick={e=>{e.stopPropagation();onUserTap?.({id:post.user_id,display_name:post.display_name});}}
+          style={{cursor:"pointer"}}>
+          <InitialsAvatar name={post.display_name} size={40}/>
+        </div>
         <div style={{flex:1}}>
-          <span style={{color:C.cream,fontWeight:700,fontSize:14}}>{post.display_name||"Someone"}</span>
+          <span onClick={e=>{e.stopPropagation();onUserTap?.({id:post.user_id,display_name:post.display_name});}}
+            style={{color:C.cream,fontWeight:700,fontSize:14,cursor:"pointer"}}>{post.display_name||"Someone"}</span>
           <div style={{marginTop:2}}>
             <button onClick={e=>{e.stopPropagation();onBarTap?.(post);}}
               style={{background:"none",border:"none",padding:0,cursor:"pointer",
@@ -873,7 +881,7 @@ async function seedDemoPosts() {
 }
 
 // ── Feed tab ──────────────────────────────────────────────────────────────────
-function FeedTab({ location, laws, currentUser, onCheckIn, onBarTap, onPostTap, friendIds }) {
+function FeedTab({ location, laws, currentUser, onCheckIn, onBarTap, onPostTap, onUserTap, friendIds }) {
   const [posts,setPosts]     = useState([]);
   const [loading,setLoading] = useState(true);
   const [filter,setFilter]   = useState("all"); // "all" | "friends" 
@@ -1232,6 +1240,7 @@ export default function App() {
   const [barPage,setBarPage]         = useState(null);
   const [postPage,setPostPage]       = useState(null);
   const [friendsPage,setFriendsPage] = useState(false);
+  const [userPage,setUserPage]       = useState(null); // {id, display_name}
 
   const laws = location?.state ? STATE_LAWS[location.state] : null;
   const barLaws = barPage?.state ? STATE_LAWS[barPage.state] : laws;
@@ -1302,7 +1311,7 @@ export default function App() {
       </div>
 
       <div style={{flex:1,padding:"13px 13px 80px",overflowY:"auto"}}>
-        {tab==="feed"    && <FeedTab location={location} laws={laws} currentUser={session.user} onCheckIn={()=>setShowModal(true)} onBarTap={handleBarTap} onPostTap={p=>setPostPage(p)} friendIds={friendIds}/>}
+        {tab==="feed"    && <FeedTab location={location} laws={laws} currentUser={session.user} onCheckIn={()=>setShowModal(true)} onBarTap={handleBarTap} onPostTap={p=>setPostPage(p)} onUserTap={u=>setUserPage(u)} friendIds={friendIds}/>}
         {tab==="nearby"  && <NearbyTab location={location} laws={laws} currentUser={session.user} onBarTap={handleBarTap}/>}
         {tab==="profile" && <ProfileTab currentUser={session.user} onLogout={()=>supabase.auth.signOut()} onBarTap={handleBarTap} onFriends={()=>setFriendsPage(true)}/>}
       </div>
@@ -1333,12 +1342,24 @@ export default function App() {
         <FriendsPage currentUser={session.user} onBack={()=>{ setFriendsPage(false); reloadFriends(); }}/>
       )}
 
+      {/* User profile page */}
+      {userPage && (
+        <UserPage
+          userId={userPage.id} displayName={userPage.display_name}
+          currentUser={session.user}
+          onBack={()=>setUserPage(null)}
+          onBarTap={p=>{ setUserPage(null); handleBarTap(p); }}
+          onPostTap={p=>setPostPage(p)}
+          onUserTap={u=>{ if(u.id!==userPage.id) setUserPage(u); }}/>
+      )}
+
       {/* Post page */}
       {postPage && (
         <PostPage
           post={postPage} currentUser={session.user}
           onBack={()=>setPostPage(null)}
-          onBarTap={p=>{ setPostPage(null); handleBarTap(p); }}/>
+          onBarTap={p=>{ setPostPage(null); handleBarTap(p); }}
+          onUserTap={u=>setUserPage(u)}/>
       )}
 
       {/* Bar page — slides over everything */}
@@ -1347,7 +1368,8 @@ export default function App() {
           barName={barPage.bar_name} placeId={barPage.place_id}
           laws={barLaws} currentUser={session.user} location={location}
           onBack={()=>setBarPage(null)}
-          onPostTap={p=>setPostPage(p)}/>
+          onPostTap={p=>setPostPage(p)}
+          onUserTap={u=>setUserPage(u)}/>
       )}
 
       {showModal && (
@@ -1359,6 +1381,165 @@ export default function App() {
           onSelect={code=>{setLocation(l=>({...l,state:code,city:""}));setShowPicker(false);}}
           onClose={()=>setShowPicker(false)}/>
       )}
+    </div>
+  );
+}
+
+// ── User profile page ────────────────────────────────────────────────────────
+function UserPage({ userId, displayName, currentUser, onBack, onBarTap, onPostTap }) {
+  const [posts, setPosts]           = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [friendship, setFriendship] = useState(null); // null | {id, status, iRequested}
+  const [actionLoading, setActionLoading] = useState(false);
+
+  const isMe = userId === currentUser?.id;
+
+  useEffect(() => {
+    // Load their posts
+    supabase.from("posts").select("*").eq("user_id", userId)
+      .order("created_at", { ascending:false })
+      .then(({ data }) => { if (data) setPosts(data); setLoading(false); });
+
+    // Load friendship status
+    if (!isMe) {
+      supabase.from("friendships").select("*")
+        .or(`and(requester_id.eq.${currentUser.id},addressee_id.eq.${userId}),and(requester_id.eq.${userId},addressee_id.eq.${currentUser.id})`)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data) setFriendship({ id: data.id, status: data.status, iRequested: data.requester_id === currentUser.id });
+        });
+    }
+  }, [userId]);
+
+  async function sendRequest() {
+    setActionLoading(true);
+    const { data } = await supabase.from("friendships")
+      .insert({ requester_id: currentUser.id, addressee_id: userId, status:"pending" })
+      .select().single();
+    if (data) setFriendship({ id: data.id, status:"pending", iRequested:true });
+    setActionLoading(false);
+  }
+
+  async function acceptRequest() {
+    setActionLoading(true);
+    await supabase.from("friendships").update({ status:"accepted" }).eq("id", friendship.id);
+    setFriendship(f => ({...f, status:"accepted"}));
+    setActionLoading(false);
+  }
+
+  async function removeFriend() {
+    setActionLoading(true);
+    await supabase.from("friendships").delete().eq("id", friendship.id);
+    setFriendship(null);
+    setActionLoading(false);
+  }
+
+  const avgRating = posts.length
+    ? (posts.reduce((s,p) => s + p.rating, 0) / posts.length).toFixed(1)
+    : null;
+  const uniqueBars = new Set(posts.map(p => p.bar_name)).size;
+
+  // Friend action button
+  function FriendButton() {
+    if (isMe) return null;
+    if (!friendship) return (
+      <button onClick={sendRequest} disabled={actionLoading}
+        style={{background:`linear-gradient(135deg,${C.amber},${C.amberLt})`,
+          color:"#141210",border:"none",borderRadius:10,padding:"9px 18px",
+          fontWeight:800,fontSize:13,cursor:"pointer"}}>
+        {actionLoading ? "…" : "Add Friend 🍻"}
+      </button>
+    );
+    if (friendship.status === "pending" && friendship.iRequested) return (
+      <button onClick={removeFriend} disabled={actionLoading}
+        style={{background:"none",border:`1px solid ${C.border}`,borderRadius:10,
+          padding:"9px 18px",color:C.muted,fontSize:13,cursor:"pointer",fontWeight:600}}>
+        {actionLoading ? "…" : "Request Sent"}
+      </button>
+    );
+    if (friendship.status === "pending" && !friendship.iRequested) return (
+      <div style={{display:"flex",gap:8}}>
+        <button onClick={acceptRequest} disabled={actionLoading}
+          style={{background:`linear-gradient(135deg,${C.amber},${C.amberLt})`,
+            color:"#141210",border:"none",borderRadius:10,padding:"9px 16px",
+            fontWeight:800,fontSize:13,cursor:"pointer"}}>
+          {actionLoading ? "…" : "Accept 🍻"}
+        </button>
+        <button onClick={removeFriend} disabled={actionLoading}
+          style={{background:"none",border:`1px solid ${C.border}`,borderRadius:10,
+            padding:"9px 14px",color:C.muted,fontSize:13,cursor:"pointer"}}>
+          Decline
+        </button>
+      </div>
+    );
+    if (friendship.status === "accepted") return (
+      <button onClick={removeFriend} disabled={actionLoading}
+        style={{background:"none",border:`1px solid ${C.amber}44`,borderRadius:10,
+          padding:"9px 18px",color:C.amber,fontSize:13,cursor:"pointer",fontWeight:700}}>
+        {actionLoading ? "…" : "🍻 Friends"}
+      </button>
+    );
+    return null;
+  }
+
+  return (
+    <div style={{position:"fixed",inset:0,zIndex:165,background:C.bg,
+      display:"flex",flexDirection:"column",
+      fontFamily:"'Inter',-apple-system,sans-serif"}}>
+
+      {/* Header */}
+      <div style={{background:C.card,borderBottom:`1px solid ${C.border}`,
+        padding:"14px 16px",display:"flex",alignItems:"center",gap:12,
+        position:"sticky",top:0,zIndex:10}}>
+        <button onClick={onBack} style={{background:"none",border:"none",
+          color:C.amber,fontSize:22,cursor:"pointer",padding:0,lineHeight:1}}>‹</button>
+        <div style={{color:C.cream,fontWeight:800,fontSize:16}}>{displayName}</div>
+      </div>
+
+      <div style={{flex:1,overflowY:"auto",padding:"14px 14px 40px"}}>
+
+        {/* Profile card */}
+        <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,
+          padding:"20px 16px",marginBottom:14,textAlign:"center"}}>
+          <InitialsAvatar name={displayName} size={64}/>
+          <div style={{color:C.cream,fontWeight:800,fontSize:20,marginTop:10}}>{displayName}</div>
+
+          {/* Stats */}
+          <div style={{display:"flex",justifyContent:"center",gap:24,marginTop:16,marginBottom:16}}>
+            {[
+              ["Beers", posts.length],
+              ["Bars",  uniqueBars],
+              ["Avg ★", avgRating || "—"],
+            ].map(([l,v]) => (
+              <div key={l} style={{textAlign:"center"}}>
+                <div style={{color:C.amber,fontSize:20,fontWeight:800}}>{v}</div>
+                <div style={{color:C.muted,fontSize:11}}>{l}</div>
+              </div>
+            ))}
+          </div>
+
+          <FriendButton/>
+        </div>
+
+        {/* Their posts */}
+        <div style={{color:C.muted,fontSize:11,fontWeight:700,letterSpacing:".06em",
+          textTransform:"uppercase",marginBottom:10}}>
+          {isMe ? "Your Check-ins" : `${displayName.split(" ")[0]}'s Check-ins`}
+        </div>
+
+        {loading ? (
+          <div style={{textAlign:"center",padding:40,color:C.muted}}>Loading…</div>
+        ) : posts.length === 0 ? (
+          <div style={{textAlign:"center",padding:"30px 0"}}>
+            <div style={{fontSize:36,marginBottom:8}}>🍺</div>
+            <div style={{color:C.muted,fontSize:13}}>No check-ins yet</div>
+          </div>
+        ) : posts.map(p => (
+          <FeedCard key={p.id} post={p} currentUser={currentUser}
+            onBarTap={onBarTap} onPostTap={onPostTap}
+            onUserTap={null}/>
+        ))}
+      </div>
     </div>
   );
 }
