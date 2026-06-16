@@ -405,7 +405,7 @@ function BarPage({ barName, placeId, laws, currentUser, location, onBack, onPost
         <CheckInModal
           onClose={()=>setShowCheckIn(false)}
           onPost={newPost=>{ setPosts(prev=>[newPost,...prev]); setShowCheckIn(false); }}
-          location={location} laws={laws} currentUser={currentUser}
+          location={location} laws={laws} currentUser={currentUser} friends={[]}
           preselectedBar={barName} preselectedPlaceId={placeId}/>
       )}
     </div>
@@ -756,7 +756,7 @@ function FeedCard({ post, currentUser, onBarTap, onPostTap, onUserTap }) {
 }
 
 // ── Check-in modal ────────────────────────────────────────────────────────────
-function CheckInModal({ onClose, onPost, location, laws, currentUser, preselectedBar="", preselectedPlaceId=null }) {
+function CheckInModal({ onClose, onPost, location, laws, currentUser, friends=[], preselectedBar="", preselectedPlaceId=null }) {
   const [beer,setBeer]         = useState("");
   const [rating,setRating]     = useState(0);
   const [bar,setBar]           = useState(preselectedBar);
@@ -879,7 +879,7 @@ function CheckInModal({ onClose, onPost, location, laws, currentUser, preselecte
               )}
             </div>
 
-            <FriendPicker currentUser={currentUser} selected={tagged} onToggle={toggleTag}/>
+            <FriendPicker friends={friends} selected={tagged} onToggle={toggleTag}/>
 
             <Field label="Note (optional)">
               <textarea value={note} onChange={e=>setNote(e.target.value)}
@@ -1510,7 +1510,7 @@ export default function App() {
 
       {showModal && (
         <CheckInModal onClose={()=>setShowModal(false)} onPost={()=>setShowModal(false)}
-          location={location} laws={laws} currentUser={session.user}/>
+          location={location} laws={laws} currentUser={session.user} friends={friends}/>
       )}
       {showPicker && (
         <StatePickerModal
@@ -2027,8 +2027,7 @@ function FriendsPage({ currentUser, onBack, onUserTap, friends, incoming, outgoi
 }
 
 // ── Tag friends picker (in check-in modal) ────────────────────────────────────
-function FriendPicker({ currentUser, selected, onToggle }) {
-  const { friends } = useFriends(currentUser);
+function FriendPicker({ friends=[], selected, onToggle }) {
   if (friends.length === 0) return null;
   return (
     <div style={{marginBottom:14}}>
