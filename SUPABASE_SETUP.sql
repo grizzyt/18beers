@@ -194,3 +194,35 @@ create policy "Anyone can view avatars" on storage.objects for select using (buc
 create policy "Users can upload own avatar" on storage.objects for insert with check (bucket_id = 'avatars' and auth.uid()::text = (storage.foldername(name))[1]);
 create policy "Users can update own avatar" on storage.objects for update using (bucket_id = 'avatars' and auth.uid()::text = (storage.foldername(name))[1]);
 create policy "Users can delete own avatar" on storage.objects for delete using (bucket_id = 'avatars' and auth.uid()::text = (storage.foldername(name))[1]);
+
+-- ── IMPORTANT: Run this to add missing columns if you skipped earlier ─────────
+alter table public.posts add column if not exists photo_url text;
+alter table public.profiles add column if not exists avatar_url text;
+
+-- Drop and recreate storage policies cleanly (in case of conflicts)
+drop policy if exists "Anyone can view post photos" on storage.objects;
+drop policy if exists "Logged in users can upload post photos" on storage.objects;
+drop policy if exists "Users can delete own post photos" on storage.objects;
+drop policy if exists "Anyone can view avatars" on storage.objects;
+drop policy if exists "Users can upload own avatar" on storage.objects;
+drop policy if exists "Users can update own avatar" on storage.objects;
+drop policy if exists "Users can delete own avatar" on storage.objects;
+
+-- Recreate buckets as public
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('post-photos', 'post-photos', true, 5242880, array['image/jpeg','image/png','image/webp','image/gif'])
+on conflict (id) do update set public = true;
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('avatars', 'avatars', true, 2097152, array['image/jpeg','image/png','image/webp'])
+on conflict (id) do update set public = true;
+
+-- Simple open policies for public buckets
+create policy "Public read post-photos" on storage.objects for select using (bucket_id = 'post-photos');
+create policy "Auth upload post-photos" on storage.objects for insert with check (bucket_id = 'post-photos' and auth.role() = 'authenticated');
+create policy "Auth delete post-photos" on storage.objects for delete using (bucket_id = 'post-photos' and auth.uid()::text = (storage.foldername(name))[1]);
+
+create policy "Public read avatars" on storage.objects for select using (bucket_id = 'avatars');
+create policy "Auth upload avatars" on storage.objects for insert with check (bucket_id = 'avatars' and auth.role() = 'authenticated');
+create policy "Auth update avatars" on storage.objects for update using (bucket_id = 'avatars' and auth.uid()::text = (storage.foldername(name))[1]);
+create policy "Auth delete avatars" on storage.objects for delete using (bucket_id = 'avatars' and auth.uid()::text = (storage.foldername(name))[1]);

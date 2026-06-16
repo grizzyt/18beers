@@ -802,12 +802,14 @@ function CheckInModal({ onClose, onPost, location, laws, currentUser, preselecte
     // Upload photo if selected
     let photo_url = null;
     if (photo) {
-      const ext = photo.name.split(".").pop();
+      const ext = photo.name.split(".").pop() || "jpg";
       const path = `${currentUser.id}/${Date.now()}.${ext}`;
-      const { error: uploadErr } = await supabase.storage.from("post-photos").upload(path, photo);
+      const { error: uploadErr } = await supabase.storage.from("post-photos").upload(path, photo, { upsert: true });
       if (!uploadErr) {
         const { data: urlData } = supabase.storage.from("post-photos").getPublicUrl(path);
         photo_url = urlData.publicUrl;
+      } else {
+        console.error("Photo upload error:", uploadErr);
       }
     }
 
@@ -1175,8 +1177,17 @@ function ProfileTab({ currentUser, onLogout, onBarTap, onFriends, onUserTap, inc
   const avatarInputRef = useRef(null);
 
   useEffect(() => {
+    // Try cache first
+    const cached = sessionStorage.getItem("18b_avatar_" + currentUser.id);
+    if (cached) setAvatarUrl(cached);
+    // Always fetch fresh from DB
     supabase.from("profiles").select("avatar_url").eq("id", currentUser.id).single()
-      .then(({data}) => { if (data?.avatar_url) setAvatarUrl(data.avatar_url); });
+      .then(({data}) => {
+        if (data?.avatar_url) {
+          setAvatarUrl(data.avatar_url);
+          sessionStorage.setItem("18b_avatar_" + currentUser.id, data.avatar_url);
+        }
+      });
   }, [currentUser.id]);
 
   async function handleAvatarChange(e) {
@@ -1185,11 +1196,14 @@ function ProfileTab({ currentUser, onLogout, onBarTap, onFriends, onUserTap, inc
     setUploadingAvatar(true);
     const ext = file.name.split(".").pop();
     const path = `${currentUser.id}/avatar.${ext}`;
-    await supabase.storage.from("avatars").upload(path, file, { upsert:true });
+    const { error: upErr } = await supabase.storage.from("avatars").upload(path, file, { upsert:true });
+    if (upErr) { console.error("Avatar upload error:", upErr); setUploadingAvatar(false); return; }
     const { data:urlData } = supabase.storage.from("avatars").getPublicUrl(path);
-    const url = urlData.publicUrl + "?t=" + Date.now(); // cache bust
-    await supabase.from("profiles").update({ avatar_url:url }).eq("id", currentUser.id);
+    const url = urlData.publicUrl + "?t=" + Date.now();
+    const { error: dbErr } = await supabase.from("profiles").update({ avatar_url:url }).eq("id", currentUser.id);
+    if (dbErr) { console.error("Avatar DB error:", dbErr); setUploadingAvatar(false); return; }
     setAvatarUrl(url);
+    sessionStorage.setItem("18b_avatar_" + currentUser.id, url);
     setUploadingAvatar(false);
   }
   const [posts,setPosts]     = useState([]);
