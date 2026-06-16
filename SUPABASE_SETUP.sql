@@ -167,3 +167,30 @@ create policy "Profiles searchable by logged in users" on public.profiles for se
 
 -- Realtime for friendships
 alter publication supabase_realtime add table public.friendships;
+
+-- ── Photos / Storage setup ────────────────────────────────────────────────────
+-- Run this in Supabase SQL Editor
+
+-- Add photo_url to posts
+alter table public.posts add column if not exists photo_url text;
+
+-- Add avatar_url to profiles
+alter table public.profiles add column if not exists avatar_url text;
+
+-- Storage buckets are created via the Supabase dashboard or API
+-- Go to Storage → New bucket:
+--   1. Name: "post-photos"  | Public: ON
+--   2. Name: "avatars"      | Public: ON
+
+-- Storage RLS policies (run after creating buckets)
+insert into storage.buckets (id, name, public) values ('post-photos', 'post-photos', true) on conflict do nothing;
+insert into storage.buckets (id, name, public) values ('avatars', 'avatars', true) on conflict do nothing;
+
+create policy "Anyone can view post photos" on storage.objects for select using (bucket_id = 'post-photos');
+create policy "Logged in users can upload post photos" on storage.objects for insert with check (bucket_id = 'post-photos' and auth.uid() is not null);
+create policy "Users can delete own post photos" on storage.objects for delete using (bucket_id = 'post-photos' and auth.uid()::text = (storage.foldername(name))[1]);
+
+create policy "Anyone can view avatars" on storage.objects for select using (bucket_id = 'avatars');
+create policy "Users can upload own avatar" on storage.objects for insert with check (bucket_id = 'avatars' and auth.uid()::text = (storage.foldername(name))[1]);
+create policy "Users can update own avatar" on storage.objects for update using (bucket_id = 'avatars' and auth.uid()::text = (storage.foldername(name))[1]);
+create policy "Users can delete own avatar" on storage.objects for delete using (bucket_id = 'avatars' and auth.uid()::text = (storage.foldername(name))[1]);

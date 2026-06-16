@@ -168,10 +168,14 @@ function Field({ label, children }) {
   );
 }
 
-function InitialsAvatar({ name, size=40 }) {
+function InitialsAvatar({ name, size=40, url=null }) {
   const initials = (name||"?").split(" ").map(w=>w[0]).join("").toUpperCase().slice(0,2);
   const colors = [C.amber,C.green,C.blue,"#E05050","#9B59B6"];
   const color = colors[(name||"").charCodeAt(0)%colors.length];
+  if (url) return (
+    <img src={url} alt={name} style={{width:size,height:size,borderRadius:"50%",
+      border:`2px solid ${color}`,objectFit:"cover",flexShrink:0,display:"block"}}/>
+  );
   return (
     <div style={{width:size,height:size,borderRadius:"50%",background:color+"22",
       border:`2px solid ${color}`,display:"flex",alignItems:"center",justifyContent:"center",
@@ -569,6 +573,12 @@ function BarPostCard({ post, currentUser, onPostTap, onUserTap }) {
         </div>
       </div>
 
+      {post.photo_url&&(
+        <div style={{borderRadius:10,overflow:"hidden",marginBottom:9}}>
+          <img src={post.photo_url} alt="post" style={{width:"100%",maxHeight:200,objectFit:"cover",display:"block"}}/>
+        </div>
+      )}
+
       {post.note&&<p style={{color:C.cream,fontSize:13,margin:"0 0 10px",lineHeight:1.5}}>{post.note}</p>}
 
       <div onClick={e=>e.stopPropagation()}>
@@ -639,6 +649,13 @@ function PostPage({ post, currentUser, onBack, onBarTap, onUserTap }) {
               {post.to_go&&<span style={{marginLeft:"auto",fontSize:11,...pill(C.green)}}>🥡 To-go</span>}
             </div>
           </div>
+
+          {/* Photo */}
+          {post.photo_url&&(
+            <div style={{borderRadius:10,overflow:"hidden",marginBottom:12,marginTop:4}}>
+              <img src={post.photo_url} alt="post" style={{width:"100%",objectFit:"cover",display:"block",borderRadius:10}}/>
+            </div>
+          )}
 
           {/* Note */}
           {post.note&&(
@@ -713,6 +730,12 @@ function FeedCard({ post, currentUser, onBarTap, onPostTap, onUserTap }) {
         </div>
       </div>
 
+      {post.photo_url&&(
+        <div style={{borderRadius:10,overflow:"hidden",marginBottom:9}}>
+          <img src={post.photo_url} alt="post" style={{width:"100%",maxHeight:240,objectFit:"cover",display:"block"}}/>
+        </div>
+      )}
+
       {post.note&&<p style={{color:C.cream,fontSize:13,margin:"0 0 9px",lineHeight:1.5}}>{post.note}</p>}
 
       {laws&&(
@@ -741,12 +764,22 @@ function CheckInModal({ onClose, onPost, location, laws, currentUser, preselecte
   const [note,setNote]         = useState("");
   const [toGo,setToGo]         = useState(false);
   const [tagged,setTagged]     = useState([]);
+  const [photo,setPhoto]       = useState(null);   // File object
+  const [photoPreview,setPhotoPreview] = useState(null);
   const [saving,setSaving]     = useState(false);
   const [posted,setPosted]     = useState(false);
-  const barInputRef = useRef(null);
+  const barInputRef  = useRef(null);
+  const photoInputRef = useRef(null);
 
   function toggleTag(friend) {
     setTagged(t => t.some(f=>f.id===friend.id) ? t.filter(f=>f.id!==friend.id) : [...t, friend]);
+  }
+
+  function handlePhotoChange(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    setPhoto(file);
+    setPhotoPreview(URL.createObjectURL(file));
   }
 
   useEffect(() => {
@@ -765,12 +798,25 @@ function CheckInModal({ onClose, onPost, location, laws, currentUser, preselecte
   async function post() {
     if (!canPost||saving) return;
     setSaving(true);
+
+    // Upload photo if selected
+    let photo_url = null;
+    if (photo) {
+      const ext = photo.name.split(".").pop();
+      const path = `${currentUser.id}/${Date.now()}.${ext}`;
+      const { error: uploadErr } = await supabase.storage.from("post-photos").upload(path, photo);
+      if (!uploadErr) {
+        const { data: urlData } = supabase.storage.from("post-photos").getPublicUrl(path);
+        photo_url = urlData.publicUrl;
+      }
+    }
+
     const entry = {
       user_id: currentUser.id,
       display_name: currentUser.user_metadata?.display_name || currentUser.email?.split("@")[0],
       beer, rating, bar_name:bar, place_id:placeId,
       city:location?.city||null, state:location?.state||null,
-      note:note||null, to_go:toGo, likes:0,
+      note:note||null, to_go:toGo, photo_url, likes:0,
     };
     const { data, error } = await supabase.from("posts").insert(entry).select().single();
     if (!error && data && tagged.length > 0) {
@@ -805,6 +851,32 @@ function CheckInModal({ onClose, onPost, location, laws, currentUser, preselecte
                   placeholder="Search for a bar…" style={inp(!!bar)}/>
               </Field>
             )}
+            {/* Photo upload */}
+            <div style={{marginBottom:14}}>
+              <div style={{color:C.muted,fontSize:11,fontWeight:700,letterSpacing:".06em",
+                textTransform:"uppercase",marginBottom:8}}>Add Photo</div>
+              <input ref={photoInputRef} type="file" accept="image/*" onChange={handlePhotoChange}
+                style={{display:"none"}}/>
+              {photoPreview ? (
+                <div style={{position:"relative",borderRadius:12,overflow:"hidden",marginBottom:6}}>
+                  <img src={photoPreview} alt="preview"
+                    style={{width:"100%",maxHeight:200,objectFit:"cover",display:"block",borderRadius:12}}/>
+                  <button onClick={()=>{setPhoto(null);setPhotoPreview(null);}}
+                    style={{position:"absolute",top:8,right:8,background:"rgba(0,0,0,0.6)",
+                      color:"#fff",border:"none",borderRadius:"50%",width:28,height:28,
+                      cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+                </div>
+              ) : (
+                <button onClick={()=>photoInputRef.current?.click()}
+                  style={{width:"100%",padding:"12px",background:"#161208",
+                    border:`1px dashed ${C.border}`,borderRadius:10,
+                    color:C.muted,fontSize:13,cursor:"pointer",
+                    display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+                  📷 Add a photo
+                </button>
+              )}
+            </div>
+
             <FriendPicker currentUser={currentUser} selected={tagged} onToggle={toggleTag}/>
 
             <Field label="Note (optional)">
@@ -1098,6 +1170,28 @@ function NearbyTab({ location, laws, currentUser, onBarTap }) {
 
 // ── Profile tab ───────────────────────────────────────────────────────────────
 function ProfileTab({ currentUser, onLogout, onBarTap, onFriends, onUserTap, incomingCount=0 }) {
+  const [avatarUrl, setAvatarUrl] = useState(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const avatarInputRef = useRef(null);
+
+  useEffect(() => {
+    supabase.from("profiles").select("avatar_url").eq("id", currentUser.id).single()
+      .then(({data}) => { if (data?.avatar_url) setAvatarUrl(data.avatar_url); });
+  }, [currentUser.id]);
+
+  async function handleAvatarChange(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploadingAvatar(true);
+    const ext = file.name.split(".").pop();
+    const path = `${currentUser.id}/avatar.${ext}`;
+    await supabase.storage.from("avatars").upload(path, file, { upsert:true });
+    const { data:urlData } = supabase.storage.from("avatars").getPublicUrl(path);
+    const url = urlData.publicUrl + "?t=" + Date.now(); // cache bust
+    await supabase.from("profiles").update({ avatar_url:url }).eq("id", currentUser.id);
+    setAvatarUrl(url);
+    setUploadingAvatar(false);
+  }
   const [posts,setPosts]     = useState([]);
   const [loading,setLoading] = useState(true);
   const [filter,setFilter]   = useState("all"); // "all" | "friends" 
@@ -1122,7 +1216,16 @@ function ProfileTab({ currentUser, onLogout, onBarTap, onFriends, onUserTap, inc
     <div>
       <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,
         padding:"18px 16px",marginBottom:14,textAlign:"center"}}>
-        <InitialsAvatar name={displayName} size={60}/>
+        <input ref={avatarInputRef} type="file" accept="image/*" onChange={handleAvatarChange} style={{display:"none"}}/>
+        <div onClick={()=>avatarInputRef.current?.click()}
+          style={{display:"inline-block",position:"relative",cursor:"pointer",marginBottom:2}}>
+          <InitialsAvatar name={displayName} size={68} url={avatarUrl}/>
+          <div style={{position:"absolute",bottom:0,right:0,background:C.amber,borderRadius:"50%",
+            width:22,height:22,display:"flex",alignItems:"center",justifyContent:"center",
+            fontSize:12,border:"2px solid "+C.bg}}>
+            {uploadingAvatar ? "⏳" : "📷"}
+          </div>
+        </div>
         <div style={{color:C.cream,fontWeight:800,fontSize:18,marginTop:10}}>{displayName}</div>
         <div style={{color:C.muted,fontSize:12,marginTop:2}}>{currentUser.email}</div>
         <div style={{display:"flex",justifyContent:"center",gap:28,marginTop:16}}>
@@ -1420,10 +1523,17 @@ function UserPage({ userId, displayName, currentUser, onBack, onBarTap, onPostTa
 
   const isMe = userId === currentUser?.id;
 
+  const [avatarUrl, setAvatarUrl] = useState(null);
+
   useEffect(() => {
     setLoading(true);
     setPosts([]);
     setFriendship(null);
+    setAvatarUrl(null);
+
+    // Load their avatar
+    supabase.from("profiles").select("avatar_url").eq("id", userId).single()
+      .then(({data}) => { if (data?.avatar_url) setAvatarUrl(data.avatar_url); });
 
     supabase.from("posts").select("*").eq("user_id", userId)
       .order("created_at", { ascending:false })
@@ -1531,7 +1641,7 @@ function UserPage({ userId, displayName, currentUser, onBack, onBarTap, onPostTa
       <div style={{flex:1,overflowY:"auto",padding:"14px 14px 40px"}}>
         <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,
           padding:"20px 16px",marginBottom:14,textAlign:"center"}}>
-          <InitialsAvatar name={name} size={64}/>
+          <InitialsAvatar name={name} size={64} url={avatarUrl}/>
           <div style={{color:C.cream,fontWeight:800,fontSize:20,marginTop:10}}>{name}</div>
           <div style={{display:"flex",justifyContent:"center",gap:24,marginTop:16,marginBottom:16}}>
             {[["Beers",posts.length],["Bars",uniqueBars],["Avg ★",avgRating||"—"]].map(([l,v]) => (
