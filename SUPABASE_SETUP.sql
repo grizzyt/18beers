@@ -68,3 +68,51 @@ create policy "Users can unlike" on public.likes for delete using (auth.uid() = 
 
 -- 5. Enable realtime on posts
 alter publication supabase_realtime add table public.posts;
+
+-- ── Run this block to add comments support ──────────────────────────────────
+
+create table if not exists public.comments (
+  id uuid default gen_random_uuid() primary key,
+  post_id uuid references public.posts on delete cascade not null,
+  user_id uuid references auth.users on delete cascade not null,
+  display_name text,
+  body text not null,
+  created_at timestamp with time zone default timezone('utc', now())
+);
+
+alter table public.comments enable row level security;
+
+create policy "Comments are viewable by everyone" on public.comments for select using (true);
+create policy "Logged in users can comment" on public.comments for insert with check (auth.uid() = user_id);
+create policy "Users can delete own comments" on public.comments for delete using (auth.uid() = user_id);
+
+-- Add comment_count column to posts for fast display
+alter table public.posts add column if not exists comment_count integer default 0;
+
+-- Auto-increment/decrement comment_count
+create or replace function public.handle_comment_insert()
+returns trigger as $$
+begin
+  update public.posts set comment_count = comment_count + 1 where id = new.post_id;
+  return new;
+end;
+$$ language plpgsql security definer;
+
+create or replace function public.handle_comment_delete()
+returns trigger as $$
+begin
+  update public.posts set comment_count = greatest(comment_count - 1, 0) where id = old.post_id;
+  return old;
+end;
+$$ language plpgsql security definer;
+
+drop trigger if exists on_comment_insert on public.comments;
+create trigger on_comment_insert after insert on public.comments
+  for each row execute procedure public.handle_comment_insert();
+
+drop trigger if exists on_comment_delete on public.comments;
+create trigger on_comment_delete after delete on public.comments
+  for each row execute procedure public.handle_comment_delete();
+
+-- Enable realtime on comments
+alter publication supabase_realtime add table public.comments;

@@ -409,27 +409,134 @@ function BarPage({ barName, placeId, laws, currentUser, location, onBack }) {
   );
 }
 
-// ── Bar post card (used inside BarPage) ───────────────────────────────────────
-function BarPostCard({ post, currentUser, onUpdate }) {
-  const [liked, setLiked]   = useState(false);
-  const [likes, setLikes]   = useState(post.likes||0);
+// ── Comment thread ────────────────────────────────────────────────────────────
+function CommentThread({ postId, currentUser }) {
+  const [comments, setComments] = useState([]);
+  const [body, setBody]         = useState("");
+  const [loading, setLoading]   = useState(true);
+  const [saving, setSaving]     = useState(false);
+
+  useEffect(() => {
+    supabase.from("comments").select("*").eq("post_id", postId)
+      .order("created_at", { ascending:true })
+      .then(({ data }) => { if (data) setComments(data); setLoading(false); });
+
+    const ch = supabase.channel("comments-" + postId)
+      .on("postgres_changes", { event:"INSERT", schema:"public", table:"comments" },
+        p => { if (p.new.post_id === postId) setComments(prev => [...prev, p.new]); })
+      .subscribe();
+    return () => supabase.removeChannel(ch);
+  }, [postId]);
+
+  async function submit() {
+    if (!body.trim() || saving) return;
+    setSaving(true);
+    const entry = {
+      post_id: postId,
+      user_id: currentUser.id,
+      display_name: currentUser.user_metadata?.display_name || currentUser.email?.split("@")[0],
+      body: body.trim(),
+    };
+    const { data } = await supabase.from("comments").insert(entry).select().single();
+    if (data) setComments(prev => [...prev, data]);
+    setBody(""); setSaving(false);
+  }
+
+  return (
+    <div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${C.border}`}}>
+      {loading ? (
+        <div style={{color:C.muted,fontSize:12,padding:"4px 0"}}>Loading comments…</div>
+      ) : comments.length === 0 ? (
+        <div style={{color:C.muted,fontSize:12,padding:"2px 0"}}>No comments yet. Be first!</div>
+      ) : comments.map(c => (
+        <div key={c.id} style={{display:"flex",gap:8,marginBottom:8}}>
+          <InitialsAvatar name={c.display_name} size={26}/>
+          <div style={{flex:1,background:"#161208",borderRadius:10,padding:"7px 10px",
+            border:`1px solid ${C.border}`}}>
+            <div style={{display:"flex",alignItems:"baseline",gap:6,marginBottom:3}}>
+              <span style={{color:C.cream,fontWeight:700,fontSize:12}}>{c.display_name}</span>
+              <span style={{color:C.muted,fontSize:10}}>{timeAgo(c.created_at)}</span>
+            </div>
+            <div style={{color:C.cream,fontSize:13,lineHeight:1.4}}>{c.body}</div>
+          </div>
+        </div>
+      ))}
+
+      {/* Comment input */}
+      <div style={{display:"flex",gap:8,marginTop:8}}>
+        <InitialsAvatar name={currentUser.user_metadata?.display_name||currentUser.email} size={26}/>
+        <div style={{flex:1,display:"flex",gap:6}}>
+          <input value={body} onChange={e=>setBody(e.target.value)}
+            onKeyDown={e=>e.key==="Enter"&&submit()}
+            placeholder="Add a comment…"
+            style={{...inp(false),padding:"7px 11px",fontSize:13,flex:1}}/>
+          <button onClick={submit} disabled={!body.trim()||saving}
+            style={{background:body.trim()?C.amber:"#2A2218",color:body.trim()?"#141210":C.muted,
+              border:"none",borderRadius:10,padding:"0 12px",fontSize:13,
+              fontWeight:800,cursor:body.trim()?"pointer":"not-allowed",flexShrink:0}}>
+            {saving?"…":"↑"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Post actions row (likes + comments, shared by FeedCard and BarPostCard) ──
+function PostActions({ post, currentUser, showComments, onToggleComments }) {
+  const isOwn   = post.user_id === currentUser?.id;
+  const [liked,  setLiked]  = useState(false);
+  const [likes,  setLikes]  = useState(post.likes || 0);
+  const [commentCount, setCommentCount] = useState(post.comment_count || 0);
+
+  // Check if already liked on mount
+  useEffect(() => {
+    if (!currentUser || isOwn) return;
+    supabase.from("likes").select("id").match({ post_id:post.id, user_id:currentUser.id }).single()
+      .then(({ data }) => { if (data) setLiked(true); });
+  }, [post.id, currentUser?.id]);
 
   async function handleLike() {
-    if (!currentUser) return;
+    if (isOwn || !currentUser) return;
     if (!liked) {
-      setLiked(true); setLikes(l=>l+1);
+      setLiked(true); setLikes(l => l+1);
       await supabase.from("likes").insert({ post_id:post.id, user_id:currentUser.id });
-      const newLikes = likes+1;
-      await supabase.from("posts").update({ likes:newLikes }).eq("id", post.id);
-      onUpdate?.({...post, likes:newLikes});
+      await supabase.from("posts").update({ likes: likes+1 }).eq("id", post.id);
     } else {
-      setLiked(false); setLikes(l=>l-1);
+      setLiked(false); setLikes(l => l-1);
       await supabase.from("likes").delete().match({ post_id:post.id, user_id:currentUser.id });
-      const newLikes = likes-1;
-      await supabase.from("posts").update({ likes:newLikes }).eq("id", post.id);
-      onUpdate?.({...post, likes:newLikes});
+      await supabase.from("posts").update({ likes: likes-1 }).eq("id", post.id);
     }
   }
+
+  return (
+    <div style={{paddingTop:8,borderTop:`1px solid ${C.border}`}}>
+      <div style={{display:"flex",gap:14}}>
+        {/* Like button */}
+        <button onClick={handleLike}
+          title={isOwn ? "Can't like your own post" : liked ? "Unlike" : "Like"}
+          style={{background:"none",border:"none",cursor:isOwn?"default":"pointer",padding:0,
+            color: liked ? C.amber : isOwn ? C.border : C.muted,
+            fontSize:13,fontWeight:liked?700:400,display:"flex",alignItems:"center",gap:4,
+            opacity: isOwn ? 0.4 : 1}}>
+          🍻 {likes}{isOwn && <span style={{fontSize:10,color:C.muted,marginLeft:2}}>(yours)</span>}
+        </button>
+
+        {/* Comment toggle */}
+        <button onClick={onToggleComments}
+          style={{background:"none",border:"none",cursor:"pointer",padding:0,
+            color:showComments?C.amber:C.muted,fontSize:13,
+            display:"flex",alignItems:"center",gap:4}}>
+          💬 {commentCount}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Bar post card (used inside BarPage) ───────────────────────────────────────
+function BarPostCard({ post, currentUser, onUpdate }) {
+  const [showComments, setShowComments] = useState(false);
 
   return (
     <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,
@@ -454,36 +561,17 @@ function BarPostCard({ post, currentUser, onUpdate }) {
 
       {post.note&&<p style={{color:C.cream,fontSize:13,margin:"0 0 10px",lineHeight:1.5}}>{post.note}</p>}
 
-      <div style={{display:"flex",gap:14,paddingTop:8,borderTop:`1px solid ${C.border}`}}>
-        <button onClick={handleLike}
-          style={{background:"none",border:"none",cursor:"pointer",padding:0,
-            color:liked?C.amber:C.muted,fontSize:13,fontWeight:liked?700:400,
-            display:"flex",alignItems:"center",gap:4}}>
-          🍻 {likes}
-        </button>
-      </div>
+      <PostActions post={post} currentUser={currentUser}
+        showComments={showComments} onToggleComments={()=>setShowComments(s=>!s)}/>
+      {showComments && <CommentThread postId={post.id} currentUser={currentUser}/>}
     </div>
   );
 }
 
-// ── Feed card (with tappable bar name) ───────────────────────────────────────
+// ── Feed card (with tappable bar name + real likes + comments) ───────────────
 function FeedCard({ post, currentUser, onBarTap }) {
-  const [liked,setLiked]   = useState(false);
-  const [likes,setLikes]   = useState(post.likes||0);
+  const [showComments, setShowComments] = useState(false);
   const laws = post.state ? STATE_LAWS[post.state] : null;
-
-  async function handleLike() {
-    if (!currentUser) return;
-    if (!liked) {
-      setLiked(true); setLikes(l=>l+1);
-      await supabase.from("likes").insert({ post_id:post.id, user_id:currentUser.id });
-      await supabase.from("posts").update({ likes:likes+1 }).eq("id",post.id);
-    } else {
-      setLiked(false); setLikes(l=>l-1);
-      await supabase.from("likes").delete().match({ post_id:post.id, user_id:currentUser.id });
-      await supabase.from("posts").update({ likes:likes-1 }).eq("id",post.id);
-    }
-  }
 
   return (
     <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:14,marginBottom:11}}>
@@ -492,7 +580,6 @@ function FeedCard({ post, currentUser, onBarTap }) {
         <div style={{flex:1}}>
           <span style={{color:C.cream,fontWeight:700,fontSize:14}}>{post.display_name||"Someone"}</span>
           <div style={{marginTop:2}}>
-            {/* Tappable bar name */}
             <button onClick={()=>onBarTap?.(post)} style={{
               background:"none",border:"none",padding:0,cursor:"pointer",
               color:C.amber,fontSize:11,fontWeight:600,textDecoration:"underline",
@@ -530,19 +617,9 @@ function FeedCard({ post, currentUser, onBarTap }) {
         </div>
       )}
 
-      <div style={{display:"flex",gap:14,paddingTop:8,borderTop:`1px solid ${C.border}`}}>
-        <button onClick={handleLike}
-          style={{background:"none",border:"none",cursor:"pointer",
-            color:liked?C.amber:C.muted,fontSize:13,padding:0,fontWeight:liked?700:400}}>
-          🍻 {likes}
-        </button>
-        <button onClick={()=>onBarTap?.(post)}
-          style={{background:"none",border:"none",cursor:"pointer",color:C.muted,fontSize:13,padding:0}}>
-          🏠 View Bar
-        </button>
-        <button style={{background:"none",border:"none",cursor:"pointer",color:C.muted,
-          fontSize:13,padding:0,marginLeft:"auto"}}>↗ Share</button>
-      </div>
+      <PostActions post={post} currentUser={currentUser}
+        showComments={showComments} onToggleComments={()=>setShowComments(s=>!s)}/>
+      {showComments && <CommentThread postId={post.id} currentUser={currentUser}/>}
     </div>
   );
 }
