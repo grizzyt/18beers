@@ -17,7 +17,7 @@ const C = {
 
 const MAPS_KEY = "AIzaSyC9eQ826QANnf_GvuRVRQLIBceKmfrHicE";
 
-// ── Shared style helpers ──────────────────────────────────────────────────────
+// ── Style helpers ─────────────────────────────────────────────────────────────
 const avatarBox = {
   width:40, height:40, borderRadius:"50%", background:"#2A2218",
   border:"2px solid #E8A020", display:"flex", alignItems:"center",
@@ -25,8 +25,8 @@ const avatarBox = {
 };
 const inp = (active) => ({
   width:"100%", background:"#161208",
-  border:"1px solid " + (active ? "#E8A020" : "#2C2618"),
-  borderRadius:10, padding:"10px 13px", color:"#F0E8D4", fontSize:14,
+  border:"1px solid " + (active ? C.amber : C.border),
+  borderRadius:10, padding:"10px 13px", color:C.cream, fontSize:14,
   outline:"none", boxSizing:"border-box", transition:"border-color .2s",
 });
 const pill = (color) => ({
@@ -88,7 +88,6 @@ const STATE_LAWS = {
   WY:{name:"Wyoming",        happyHour:true,  toGo:false,         delivery:false},
   DC:{name:"Washington DC",  happyHour:true,  toGo:"permanent",   delivery:true },
 };
-
 const US_STATES = Object.entries(STATE_LAWS).map(([k,v])=>({code:k,name:v.name}));
 
 // ── Google Maps loader ────────────────────────────────────────────────────────
@@ -97,12 +96,12 @@ function loadGoogleMaps() {
   if (mapsPromise) return mapsPromise;
   mapsPromise = new Promise((resolve, reject) => {
     if (window.google?.maps) { resolve(window.google.maps); return; }
-    const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${MAPS_KEY}&libraries=places`;
-    script.async = true;
-    script.onload = () => resolve(window.google.maps);
-    script.onerror = reject;
-    document.head.appendChild(script);
+    const s = document.createElement("script");
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${MAPS_KEY}&libraries=places`;
+    s.async = true;
+    s.onload = () => resolve(window.google.maps);
+    s.onerror = reject;
+    document.head.appendChild(s);
   });
   return mapsPromise;
 }
@@ -112,12 +111,21 @@ async function reverseGeocode(lat, lng) {
   try {
     const r = await fetch(
       `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
-      { headers: { "Accept-Language": "en" } }
+      { headers:{"Accept-Language":"en"} }
     );
     const d = await r.json();
-    const stateCode = d?.address?.["ISO3166-2-lvl4"]?.replace("US-","") || null;
-    return { city: d?.address?.city || d?.address?.town || d?.address?.county || "", state: stateCode };
+    const state = d?.address?.["ISO3166-2-lvl4"]?.replace("US-","") || null;
+    return { city: d?.address?.city || d?.address?.town || d?.address?.county || "", state };
   } catch { return null; }
+}
+
+// ── Time helper ───────────────────────────────────────────────────────────────
+function timeAgo(ts) {
+  const s = Math.floor((Date.now() - new Date(ts)) / 1000);
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s/60)}m ago`;
+  if (s < 86400) return `${Math.floor(s/3600)}h ago`;
+  return `${Math.floor(s/86400)}d ago`;
 }
 
 // ── Shared components ─────────────────────────────────────────────────────────
@@ -127,7 +135,7 @@ function StarRow({ value, onChange }) {
       {[1,2,3,4,5].map(n=>(
         <span key={n} onClick={()=>onChange?.(n)}
           style={{cursor:onChange?"pointer":"default",fontSize:20,
-            color:n<=value?"#E8A020":"#3A3228"}}>★</span>
+            color:n<=value?C.amber:"#3A3228"}}>★</span>
       ))}
     </div>
   );
@@ -140,12 +148,12 @@ function LawBadges({ laws }) {
       {laws.happyHour
         ? <span style={{fontSize:10,fontWeight:700,...pill(C.green)}}>🍻 Happy Hour OK</span>
         : <span style={{fontSize:10,fontWeight:700,...pill(C.red)}}>🚫 No Happy Hour</span>}
-      {laws.toGo==="permanent" && <span style={{fontSize:10,fontWeight:700,...pill(C.amber)}}>🥡 To-Go (Permanent)</span>}
-      {laws.toGo==="temporary" && <span style={{fontSize:10,fontWeight:700,...pill(C.amber)}}>🥡 To-Go (Temp)</span>}
-      {!laws.toGo              && <span style={{fontSize:10,fontWeight:700,...pill(C.red)}}>🚫 No To-Go</span>}
+      {laws.toGo==="permanent"&&<span style={{fontSize:10,fontWeight:700,...pill(C.amber)}}>🥡 To-Go Permanent</span>}
+      {laws.toGo==="temporary"&&<span style={{fontSize:10,fontWeight:700,...pill(C.amber)}}>🥡 To-Go Temp</span>}
+      {!laws.toGo&&<span style={{fontSize:10,fontWeight:700,...pill(C.red)}}>🚫 No To-Go</span>}
       {laws.delivery
-        ? <span style={{fontSize:10,fontWeight:700,...pill(C.blue)}}>🛵 Delivery OK</span>
-        : <span style={{fontSize:10,fontWeight:700,...pill(C.red)}}>🚫 No Delivery</span>}
+        ?<span style={{fontSize:10,fontWeight:700,...pill(C.blue)}}>🛵 Delivery OK</span>
+        :<span style={{fontSize:10,fontWeight:700,...pill(C.red)}}>🚫 No Delivery</span>}
     </div>
   );
 }
@@ -162,10 +170,10 @@ function Field({ label, children }) {
 
 function InitialsAvatar({ name, size=40 }) {
   const initials = (name||"?").split(" ").map(w=>w[0]).join("").toUpperCase().slice(0,2);
-  const colors = ["#E8A020","#4CAF6E","#4A9EE0","#E05050","#9B59B6"];
-  const color = colors[(name||"").charCodeAt(0) % colors.length];
+  const colors = [C.amber,C.green,C.blue,"#E05050","#9B59B6"];
+  const color = colors[(name||"").charCodeAt(0)%colors.length];
   return (
-    <div style={{width:size,height:size,borderRadius:"50%",background:color+"33",
+    <div style={{width:size,height:size,borderRadius:"50%",background:color+"22",
       border:`2px solid ${color}`,display:"flex",alignItems:"center",justifyContent:"center",
       fontSize:size*0.35,fontWeight:800,color,flexShrink:0}}>
       {initials}
@@ -173,34 +181,40 @@ function InitialsAvatar({ name, size=40 }) {
   );
 }
 
+// ── Star display (half-star visual) ──────────────────────────────────────────
+function StarDisplay({ value, size=16 }) {
+  return (
+    <span style={{color:C.amber,fontSize:size,fontWeight:700,letterSpacing:1}}>
+      {"★".repeat(Math.floor(value))}{"☆".repeat(5-Math.floor(value))}
+      <span style={{color:C.muted,fontSize:size*0.75,marginLeft:4}}>({value.toFixed(1)})</span>
+    </span>
+  );
+}
+
 // ── Auth Screen ───────────────────────────────────────────────────────────────
-function AuthScreen({ onAuth }) {
-  const [mode, setMode]       = useState("login"); // "login" | "signup"
-  const [email, setEmail]     = useState("");
-  const [password, setPassword] = useState("");
-  const [name, setName]       = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState(null);
-  const [success, setSuccess] = useState(null);
+function AuthScreen() {
+  const [mode,setMode]         = useState("login");
+  const [email,setEmail]       = useState("");
+  const [password,setPassword] = useState("");
+  const [name,setName]         = useState("");
+  const [loading,setLoading]   = useState(false);
+  const [error,setError]       = useState(null);
+  const [success,setSuccess]   = useState(null);
 
   async function handleSubmit() {
     setLoading(true); setError(null); setSuccess(null);
-    if (mode === "signup") {
-      const { data, error: e } = await supabase.auth.signUp({
-        email, password,
-        options: { data: { display_name: name || email.split("@")[0] } }
+    if (mode==="signup") {
+      const displayName = name || email.split("@")[0];
+      const { data, error:e } = await supabase.auth.signUp({
+        email, password, options:{ data:{ display_name:displayName } }
       });
       if (e) { setError(e.message); setLoading(false); return; }
-      // Update profile display name
-      if (data.user) {
-        await supabase.from("profiles").upsert({ id: data.user.id, display_name: name || email.split("@")[0] });
-      }
-      setSuccess("Account created! Check your email to confirm, then log in.");
+      if (data.user) await supabase.from("profiles").upsert({ id:data.user.id, display_name:displayName });
+      setSuccess("Account created! Check your email to confirm, then sign in.");
       setMode("login");
     } else {
-      const { error: e } = await supabase.auth.signInWithPassword({ email, password });
-      if (e) { setError(e.message); setLoading(false); return; }
-      // onAuth will be called by the auth listener in root
+      const { error:e } = await supabase.auth.signInWithPassword({ email, password });
+      if (e) setError(e.message);
     }
     setLoading(false);
   }
@@ -208,7 +222,7 @@ function AuthScreen({ onAuth }) {
   return (
     <div style={{minHeight:"100vh",background:C.bg,display:"flex",flexDirection:"column",
       alignItems:"center",justifyContent:"center",padding:24,
-      fontFamily:"'Inter',-apple-system,BlinkMacSystemFont,sans-serif"}}>
+      fontFamily:"'Inter',-apple-system,sans-serif"}}>
       <div style={{textAlign:"center",marginBottom:36}}>
         <div style={{fontSize:56,marginBottom:10}}>🍺</div>
         <div style={{color:C.amber,fontSize:36,fontWeight:900,letterSpacing:"-1.5px",lineHeight:1}}>
@@ -216,48 +230,37 @@ function AuthScreen({ onAuth }) {
         </div>
         <div style={{color:C.muted,fontSize:13,marginTop:8}}>Check in. Drink up. Share the round.</div>
       </div>
-
       <div style={{width:"100%",maxWidth:360}}>
-        {/* Tab toggle */}
         <div style={{display:"flex",background:C.card,borderRadius:12,padding:4,
           border:`1px solid ${C.border}`,marginBottom:20}}>
           {["login","signup"].map(m=>(
             <button key={m} onClick={()=>{setMode(m);setError(null);setSuccess(null);}}
               style={{flex:1,padding:"9px 0",border:"none",borderRadius:9,cursor:"pointer",
                 fontWeight:700,fontSize:13,transition:"all .2s",
-                background:mode===m?C.amber:"none",
-                color:mode===m?"#141210":C.muted}}>
+                background:mode===m?C.amber:"none",color:mode===m?"#141210":C.muted}}>
               {m==="login"?"Sign In":"Create Account"}
             </button>
           ))}
         </div>
-
-        {success && (
-          <div style={{background:"#1A2015",border:`1px solid ${C.green}44`,borderRadius:10,
-            padding:"10px 14px",marginBottom:14,color:C.green,fontSize:13}}>{success}</div>
-        )}
-        {error && (
-          <div style={{background:"#201515",border:`1px solid ${C.red}44`,borderRadius:10,
-            padding:"10px 14px",marginBottom:14,color:C.red,fontSize:13}}>{error}</div>
-        )}
-
+        {success&&<div style={{background:"#1A2015",border:`1px solid ${C.green}44`,borderRadius:10,
+          padding:"10px 14px",marginBottom:14,color:C.green,fontSize:13}}>{success}</div>}
+        {error&&<div style={{background:"#201515",border:`1px solid ${C.red}44`,borderRadius:10,
+          padding:"10px 14px",marginBottom:14,color:C.red,fontSize:13}}>{error}</div>}
         <div style={{display:"flex",flexDirection:"column",gap:10}}>
-          {mode==="signup" && (
+          {mode==="signup"&&(
             <input value={name} onChange={e=>setName(e.target.value)}
-              placeholder="Display name (e.g. Jake M.)"
-              style={inp(!!name)}/>
+              placeholder="Display name" style={inp(!!name)}/>
           )}
           <input value={email} onChange={e=>setEmail(e.target.value)}
             placeholder="Email" type="email" style={inp(!!email)}/>
           <input value={password} onChange={e=>setPassword(e.target.value)}
             placeholder="Password" type="password" style={inp(!!password)}
             onKeyDown={e=>e.key==="Enter"&&handleSubmit()}/>
-
           <button onClick={handleSubmit} disabled={loading||!email||!password}
             style={{padding:13,border:"none",borderRadius:12,fontSize:15,fontWeight:800,
               cursor:email&&password?"pointer":"not-allowed",marginTop:4,
               background:email&&password?`linear-gradient(135deg,${C.amber},${C.amberLt})`:"#2A2218",
-              color:email&&password?"#141210":C.muted,transition:"all .2s"}}>
+              color:email&&password?"#141210":C.muted}}>
             {loading?"...":(mode==="login"?"Sign In 🍺":"Create Account 🍺")}
           </button>
         </div>
@@ -266,41 +269,240 @@ function AuthScreen({ onAuth }) {
   );
 }
 
-// ── Feed card ─────────────────────────────────────────────────────────────────
-function FeedCard({ post, currentUser }) {
-  const [liked, setLiked] = useState(false);
-  const [likes, setLikes] = useState(post.likes || 0);
+// ── Bar Page (full-screen) ────────────────────────────────────────────────────
+function BarPage({ barName, placeId, laws, currentUser, location, onBack }) {
+  const [posts, setPosts]       = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [sortBy, setSortBy]     = useState("likes"); // "likes" | "recent"
+  const [showCheckIn, setShowCheckIn] = useState(false);
+
+  useEffect(() => {
+    loadPosts();
+    // Realtime for new posts at this bar
+    const channel = supabase.channel("bar-posts-"+placeId)
+      .on("postgres_changes", { event:"INSERT", schema:"public", table:"posts" },
+        p => { if (p.new.place_id===placeId || p.new.bar_name===barName) setPosts(prev=>[p.new,...prev]); })
+      .subscribe();
+    return () => supabase.removeChannel(channel);
+  }, [placeId, barName]);
+
+  async function loadPosts() {
+    setLoading(true);
+    const query = placeId
+      ? supabase.from("posts").select("*").eq("place_id", placeId)
+      : supabase.from("posts").select("*").eq("bar_name", barName);
+    const { data } = await query.order("created_at", { ascending:false });
+    setPosts(data || []);
+    setLoading(false);
+  }
+
+  const sorted = [...posts].sort((a,b) =>
+    sortBy==="likes" ? (b.likes-a.likes) : (new Date(b.created_at)-new Date(a.created_at))
+  );
+
+  // Aggregate stats
+  const avgRating = posts.length
+    ? (posts.reduce((s,p)=>s+p.rating,0)/posts.length)
+    : null;
+  const beerCounts = {};
+  posts.forEach(p=>{ beerCounts[p.beer]=(beerCounts[p.beer]||0)+1; });
+  const topBeer = Object.entries(beerCounts).sort((a,b)=>b[1]-a[1])[0]?.[0];
+
+  return (
+    <div style={{position:"fixed",inset:0,zIndex:150,background:C.bg,
+      display:"flex",flexDirection:"column",
+      fontFamily:"'Inter',-apple-system,sans-serif",overflowY:"auto"}}>
+
+      {/* Header */}
+      <div style={{background:C.card,borderBottom:`1px solid ${C.border}`,
+        padding:"14px 16px",position:"sticky",top:0,zIndex:10}}>
+        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:10}}>
+          <button onClick={onBack} style={{background:"none",border:"none",
+            color:C.amber,fontSize:22,cursor:"pointer",padding:0,lineHeight:1}}>‹</button>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{color:C.cream,fontWeight:800,fontSize:17,
+              overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{barName}</div>
+            {laws && <div style={{color:C.muted,fontSize:11,marginTop:1}}>{laws.name}</div>}
+          </div>
+          <button onClick={()=>setShowCheckIn(true)} style={{
+            background:`linear-gradient(135deg,${C.amber},${C.amberLt})`,
+            color:"#141210",border:"none",borderRadius:10,
+            padding:"9px 13px",fontSize:12,fontWeight:800,cursor:"pointer",flexShrink:0}}>
+            🍺 Check In
+          </button>
+        </div>
+
+        {/* Stats row */}
+        <div style={{display:"flex",gap:12,marginBottom:8}}>
+          <div style={{background:"#161208",borderRadius:10,padding:"10px 14px",flex:1,
+            border:`1px solid ${C.border}`}}>
+            <div style={{color:C.muted,fontSize:10,fontWeight:700,textTransform:"uppercase",
+              letterSpacing:".06em",marginBottom:4}}>Avg Rating</div>
+            {avgRating
+              ? <StarDisplay value={avgRating}/>
+              : <span style={{color:C.muted,fontSize:13}}>No ratings yet</span>}
+          </div>
+          <div style={{background:"#161208",borderRadius:10,padding:"10px 14px",flex:1,
+            border:`1px solid ${C.border}`}}>
+            <div style={{color:C.muted,fontSize:10,fontWeight:700,textTransform:"uppercase",
+              letterSpacing:".06em",marginBottom:4}}>Check-ins</div>
+            <span style={{color:C.cream,fontWeight:800,fontSize:18}}>{posts.length}</span>
+          </div>
+          {topBeer && (
+            <div style={{background:"#161208",borderRadius:10,padding:"10px 14px",flex:2,
+              border:`1px solid ${C.border}`}}>
+              <div style={{color:C.muted,fontSize:10,fontWeight:700,textTransform:"uppercase",
+                letterSpacing:".06em",marginBottom:4}}>Most Popular</div>
+              <div style={{color:C.amber,fontWeight:700,fontSize:12,
+                overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>🍺 {topBeer}</div>
+            </div>
+          )}
+        </div>
+
+        {laws && <LawBadges laws={laws}/>}
+      </div>
+
+      {/* Sort tabs */}
+      <div style={{display:"flex",gap:0,padding:"10px 14px 0"}}>
+        {[["likes","🍻 Most Liked"],["recent","🕐 Most Recent"]].map(([k,label])=>(
+          <button key={k} onClick={()=>setSortBy(k)}
+            style={{flex:1,padding:"8px 0",border:"none",cursor:"pointer",
+              fontWeight:700,fontSize:12,transition:"all .15s",
+              background:"none",
+              color:sortBy===k?C.amber:C.muted,
+              borderBottom:`2px solid ${sortBy===k?C.amber:"transparent"}`}}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Posts */}
+      <div style={{flex:1,padding:"10px 14px 30px"}}>
+        {loading ? (
+          <div style={{textAlign:"center",padding:40,color:C.muted}}>Loading…</div>
+        ) : sorted.length===0 ? (
+          <div style={{textAlign:"center",padding:"40px 0"}}>
+            <div style={{fontSize:40,marginBottom:10}}>🍺</div>
+            <div style={{color:C.cream,fontWeight:700,marginBottom:6}}>No check-ins yet</div>
+            <div style={{color:C.muted,fontSize:13,marginBottom:16}}>Be the first to post here!</div>
+            <button onClick={()=>setShowCheckIn(true)}
+              style={{background:`linear-gradient(135deg,${C.amber},${C.amberLt})`,
+                color:"#141210",border:"none",borderRadius:10,
+                padding:"10px 20px",fontWeight:800,fontSize:14,cursor:"pointer"}}>
+              Check In Now 🍺
+            </button>
+          </div>
+        ) : sorted.map(post=>(
+          <BarPostCard key={post.id} post={post} currentUser={currentUser}
+            onUpdate={updated=>setPosts(prev=>prev.map(p=>p.id===updated.id?updated:p))}/>
+        ))}
+      </div>
+
+      {showCheckIn && (
+        <CheckInModal
+          onClose={()=>setShowCheckIn(false)}
+          onPost={newPost=>{ setPosts(prev=>[newPost,...prev]); setShowCheckIn(false); }}
+          location={location} laws={laws} currentUser={currentUser}
+          preselectedBar={barName} preselectedPlaceId={placeId}/>
+      )}
+    </div>
+  );
+}
+
+// ── Bar post card (used inside BarPage) ───────────────────────────────────────
+function BarPostCard({ post, currentUser, onUpdate }) {
+  const [liked, setLiked]   = useState(false);
+  const [likes, setLikes]   = useState(post.likes||0);
+
+  async function handleLike() {
+    if (!currentUser) return;
+    if (!liked) {
+      setLiked(true); setLikes(l=>l+1);
+      await supabase.from("likes").insert({ post_id:post.id, user_id:currentUser.id });
+      const newLikes = likes+1;
+      await supabase.from("posts").update({ likes:newLikes }).eq("id", post.id);
+      onUpdate?.({...post, likes:newLikes});
+    } else {
+      setLiked(false); setLikes(l=>l-1);
+      await supabase.from("likes").delete().match({ post_id:post.id, user_id:currentUser.id });
+      const newLikes = likes-1;
+      await supabase.from("posts").update({ likes:newLikes }).eq("id", post.id);
+      onUpdate?.({...post, likes:newLikes});
+    }
+  }
+
+  return (
+    <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,
+      padding:14,marginBottom:11}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+        <InitialsAvatar name={post.display_name} size={38}/>
+        <div style={{flex:1}}>
+          <span style={{color:C.cream,fontWeight:700,fontSize:14}}>{post.display_name||"Someone"}</span>
+          <div style={{color:C.muted,fontSize:11,marginTop:1}}>{timeAgo(post.created_at)}</div>
+        </div>
+        {post.to_go&&<span style={{fontSize:10,...pill(C.green)}}>🥡 To-go</span>}
+      </div>
+
+      <div style={{background:"#161208",borderRadius:10,padding:"9px 12px",marginBottom:9,
+        border:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:10}}>
+        <span style={{fontSize:22}}>🍺</span>
+        <div>
+          <div style={{color:C.amber,fontWeight:700,fontSize:14}}>{post.beer}</div>
+          <StarRow value={post.rating}/>
+        </div>
+      </div>
+
+      {post.note&&<p style={{color:C.cream,fontSize:13,margin:"0 0 10px",lineHeight:1.5}}>{post.note}</p>}
+
+      <div style={{display:"flex",gap:14,paddingTop:8,borderTop:`1px solid ${C.border}`}}>
+        <button onClick={handleLike}
+          style={{background:"none",border:"none",cursor:"pointer",padding:0,
+            color:liked?C.amber:C.muted,fontSize:13,fontWeight:liked?700:400,
+            display:"flex",alignItems:"center",gap:4}}>
+          🍻 {likes}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Feed card (with tappable bar name) ───────────────────────────────────────
+function FeedCard({ post, currentUser, onBarTap }) {
+  const [liked,setLiked]   = useState(false);
+  const [likes,setLikes]   = useState(post.likes||0);
   const laws = post.state ? STATE_LAWS[post.state] : null;
 
   async function handleLike() {
     if (!currentUser) return;
     if (!liked) {
       setLiked(true); setLikes(l=>l+1);
-      await supabase.from("likes").insert({ post_id: post.id, user_id: currentUser.id });
-      await supabase.from("posts").update({ likes: likes+1 }).eq("id", post.id);
+      await supabase.from("likes").insert({ post_id:post.id, user_id:currentUser.id });
+      await supabase.from("posts").update({ likes:likes+1 }).eq("id",post.id);
     } else {
       setLiked(false); setLikes(l=>l-1);
-      await supabase.from("likes").delete().match({ post_id: post.id, user_id: currentUser.id });
-      await supabase.from("posts").update({ likes: likes-1 }).eq("id", post.id);
+      await supabase.from("likes").delete().match({ post_id:post.id, user_id:currentUser.id });
+      await supabase.from("posts").update({ likes:likes-1 }).eq("id",post.id);
     }
   }
-
-  const timeAgo = (ts) => {
-    const s = Math.floor((Date.now() - new Date(ts)) / 1000);
-    if (s < 60) return "just now";
-    if (s < 3600) return `${Math.floor(s/60)}m ago`;
-    if (s < 86400) return `${Math.floor(s/3600)}h ago`;
-    return `${Math.floor(s/86400)}d ago`;
-  };
 
   return (
     <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:14,marginBottom:11}}>
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
         <InitialsAvatar name={post.display_name} size={40}/>
         <div style={{flex:1}}>
-          <span style={{color:C.cream,fontWeight:700,fontSize:14}}>{post.display_name || "Someone"}</span>
-          <div style={{color:C.muted,fontSize:11,marginTop:1}}>
-            📍 {post.bar_name}{post.city ? ` · ${post.city}` : ""}{post.state ? `, ${post.state}` : ""}
+          <span style={{color:C.cream,fontWeight:700,fontSize:14}}>{post.display_name||"Someone"}</span>
+          <div style={{marginTop:2}}>
+            {/* Tappable bar name */}
+            <button onClick={()=>onBarTap?.(post)} style={{
+              background:"none",border:"none",padding:0,cursor:"pointer",
+              color:C.amber,fontSize:11,fontWeight:600,textDecoration:"underline",
+              textDecorationColor:C.amber+"66",textUnderlineOffset:2}}>
+              📍 {post.bar_name}
+            </button>
+            <span style={{color:C.muted,fontSize:11}}>
+              {post.city?` · ${post.city}`:""}
+              {post.state?`, ${post.state}`:""}
+            </span>
           </div>
         </div>
         <span style={{color:C.muted,fontSize:11,flexShrink:0}}>{timeAgo(post.created_at)}</span>
@@ -314,17 +516,17 @@ function FeedCard({ post, currentUser }) {
             <div style={{color:C.amber,fontWeight:700,fontSize:14}}>{post.beer}</div>
             <StarRow value={post.rating}/>
           </div>
-          {post.to_go && <span style={{marginLeft:"auto",fontSize:10,...pill(C.green)}}>🥡 To-go</span>}
+          {post.to_go&&<span style={{marginLeft:"auto",fontSize:10,...pill(C.green)}}>🥡 To-go</span>}
         </div>
       </div>
 
-      {post.note && <p style={{color:C.cream,fontSize:13,margin:"0 0 9px",lineHeight:1.5}}>{post.note}</p>}
+      {post.note&&<p style={{color:C.cream,fontSize:13,margin:"0 0 9px",lineHeight:1.5}}>{post.note}</p>}
 
-      {laws && (
+      {laws&&(
         <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:9}}>
-          {!laws.happyHour && <span style={{fontSize:10,fontWeight:700,...pill(C.red)}}>🚫 No HH in {post.state}</span>}
-          {laws.toGo==="permanent" && <span style={{fontSize:10,fontWeight:700,...pill(C.green)}}>🥡 To-go OK</span>}
-          {laws.delivery && <span style={{fontSize:10,fontWeight:700,...pill(C.blue)}}>🛵 Delivery</span>}
+          {!laws.happyHour&&<span style={{fontSize:10,fontWeight:700,...pill(C.red)}}>🚫 No HH in {post.state}</span>}
+          {laws.toGo==="permanent"&&<span style={{fontSize:10,fontWeight:700,...pill(C.green)}}>🥡 To-go OK</span>}
+          {laws.delivery&&<span style={{fontSize:10,fontWeight:700,...pill(C.blue)}}>🛵 Delivery</span>}
         </div>
       )}
 
@@ -334,8 +536,9 @@ function FeedCard({ post, currentUser }) {
             color:liked?C.amber:C.muted,fontSize:13,padding:0,fontWeight:liked?700:400}}>
           🍻 {likes}
         </button>
-        <button style={{background:"none",border:"none",cursor:"pointer",color:C.muted,fontSize:13,padding:0}}>
-          💬 0
+        <button onClick={()=>onBarTap?.(post)}
+          style={{background:"none",border:"none",cursor:"pointer",color:C.muted,fontSize:13,padding:0}}>
+          🏠 View Bar
         </button>
         <button style={{background:"none",border:"none",cursor:"pointer",color:C.muted,
           fontSize:13,padding:0,marginLeft:"auto"}}>↗ Share</button>
@@ -345,14 +548,15 @@ function FeedCard({ post, currentUser }) {
 }
 
 // ── Check-in modal ────────────────────────────────────────────────────────────
-function CheckInModal({ onClose, onPost, location, laws, currentUser, preselectedBar="" }) {
-  const [beer,   setBeer]   = useState("");
-  const [rating, setRating] = useState(0);
-  const [bar,    setBar]    = useState(preselectedBar);
-  const [note,   setNote]   = useState("");
-  const [toGo,   setToGo]   = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [posted, setPosted] = useState(false);
+function CheckInModal({ onClose, onPost, location, laws, currentUser, preselectedBar="", preselectedPlaceId=null }) {
+  const [beer,setBeer]     = useState("");
+  const [rating,setRating] = useState(0);
+  const [bar,setBar]       = useState(preselectedBar);
+  const [placeId,setPlaceId] = useState(preselectedPlaceId);
+  const [note,setNote]     = useState("");
+  const [toGo,setToGo]     = useState(false);
+  const [saving,setSaving] = useState(false);
+  const [posted,setPosted] = useState(false);
   const barInputRef = useRef(null);
 
   useEffect(() => {
@@ -362,63 +566,56 @@ function CheckInModal({ onClose, onPost, location, laws, currentUser, preselecte
     });
     ac.addListener("place_changed", () => {
       const p = ac.getPlace();
-      if (p?.name) setBar(p.name);
+      if (p?.name) { setBar(p.name); setPlaceId(p.place_id||null); }
     });
   }, [preselectedBar]);
 
   const canPost = beer && rating && bar;
 
   async function post() {
-    if (!canPost || saving) return;
+    if (!canPost||saving) return;
     setSaving(true);
     const entry = {
       user_id: currentUser.id,
       display_name: currentUser.user_metadata?.display_name || currentUser.email?.split("@")[0],
-      beer, rating,
-      bar_name: bar,
-      place_id: null,
-      city: location?.city || null,
-      state: location?.state || null,
-      note: note || null,
-      to_go: toGo,
-      likes: 0,
+      beer, rating, bar_name:bar, place_id:placeId,
+      city:location?.city||null, state:location?.state||null,
+      note:note||null, to_go:toGo, likes:0,
     };
     const { data, error } = await supabase.from("posts").insert(entry).select().single();
     setSaving(false);
-    if (!error && data) {
-      setPosted(true);
-      setTimeout(() => { onPost(data); onClose(); }, 1000);
-    }
+    if (!error&&data) { setPosted(true); setTimeout(()=>{ onPost(data); onClose(); },1000); }
   }
 
   return (
-    <div style={{position:"fixed",inset:0,zIndex:100,background:"rgba(0,0,0,0.78)",
+    <div style={{position:"fixed",inset:0,zIndex:200,background:"rgba(0,0,0,0.8)",
       backdropFilter:"blur(4px)",display:"flex",alignItems:"flex-end",justifyContent:"center"}}
       onClick={e=>e.target===e.currentTarget&&onClose()}>
       <div style={{background:C.card,borderRadius:"20px 20px 0 0",width:"100%",maxWidth:480,
         padding:"18px 18px 34px",border:`1px solid ${C.border}`,animation:"slideUp .25s ease"}}>
         <div style={{width:36,height:4,background:"#3A3228",borderRadius:2,margin:"0 auto 16px"}}/>
-
         {!posted ? (
           <>
-            <h2 style={{color:C.cream,fontSize:18,fontWeight:800,margin:"0 0 14px"}}>🍺 Check In</h2>
-
+            <h2 style={{color:C.cream,fontSize:18,fontWeight:800,margin:"0 0 14px"}}>
+              🍺 Check In{preselectedBar?` @ ${preselectedBar}`:""}
+            </h2>
             <Field label="What are you drinking?">
               <input value={beer} onChange={e=>setBeer(e.target.value)}
                 placeholder="e.g. Goose Island IPA" style={inp(!!beer)}/>
             </Field>
             <Field label="Rate it"><StarRow value={rating} onChange={setRating}/></Field>
-            <Field label="Bar / Location">
-              <input ref={barInputRef} value={bar} onChange={e=>setBar(e.target.value)}
-                placeholder="Search for a bar…" style={inp(!!bar)} readOnly={!!preselectedBar}/>
-            </Field>
+            {!preselectedBar && (
+              <Field label="Bar / Location">
+                <input ref={barInputRef} value={bar} onChange={e=>setBar(e.target.value)}
+                  placeholder="Search for a bar…" style={inp(!!bar)}/>
+              </Field>
+            )}
             <Field label="Note (optional)">
               <textarea value={note} onChange={e=>setNote(e.target.value)}
                 placeholder="How's the vibe?" rows={2}
                 style={{...inp(false),resize:"none",lineHeight:1.5}}/>
             </Field>
-
-            {laws?.toGo && (
+            {laws?.toGo&&(
               <div style={{background:"#1A2015",border:`1px solid ${C.green}44`,borderRadius:10,
                 padding:"10px 12px",marginBottom:14,display:"flex",alignItems:"center",gap:10}}>
                 <span style={{fontSize:18}}>🥡</span>
@@ -432,14 +629,12 @@ function CheckInModal({ onClose, onPost, location, laws, currentUser, preselecte
                 </div>
               </div>
             )}
-
-            {laws && !laws.happyHour && (
+            {laws&&!laws.happyHour&&(
               <div style={{background:"#201515",border:`1px solid ${C.red}33`,borderRadius:10,
                 padding:"8px 12px",marginBottom:14}}>
                 <span style={{color:C.red,fontSize:11}}>🚫 Happy hour banned in {laws.name}.</span>
               </div>
             )}
-
             <button onClick={post} disabled={!canPost||saving}
               style={{width:"100%",padding:13,border:"none",borderRadius:12,fontSize:15,
                 fontWeight:800,cursor:canPost?"pointer":"not-allowed",
@@ -461,71 +656,59 @@ function CheckInModal({ onClose, onPost, location, laws, currentUser, preselecte
   );
 }
 
-
-// ── Demo post seeder ──────────────────────────────────────────────────────────
+// ── Demo seeder ───────────────────────────────────────────────────────────────
 const DEMO_POSTS = [
-  { display_name:"Jake M.",   beer:"Goose Island IPA",      rating:4, bar_name:"The Rusty Anchor",  city:"Chicago",     state:"IL", note:"Perfect pour, super chill vibes tonight 🍺",              to_go:false },
-  { display_name:"Sara K.",   beer:"Modelo Especial",        rating:5, bar_name:"Lola's Cantina",    city:"Austin",      state:"TX", note:"$3 Modelos til 7 — happy hour is undefeated.",             to_go:false },
-  { display_name:"Derek P.",  beer:"Guinness Stout",         rating:5, bar_name:"O'Malley's Pub",    city:"Boston",      state:"MA", note:"Best Guinness outside Dublin. No debate.",                 to_go:false },
-  { display_name:"Mia R.",    beer:"Blue Moon",              rating:3, bar_name:"Rooftop 21",        city:"Nashville",   state:"TN", note:"Decent beer, incredible view. Worth it for the vibe.",     to_go:false },
-  { display_name:"Carlos V.", beer:"Dogfish Head 60 Min",    rating:5, bar_name:"Craft & Draft",     city:"Denver",      state:"CO", note:"Ordered this to go on the walk home. Love Colorado 🥡",   to_go:true  },
-  { display_name:"Priya S.",  beer:"Allagash White",         rating:5, bar_name:"The Taproom",       city:"Portland",    state:"ME", note:"This is my happy place. Every. Single. Time.",             to_go:false },
-  { display_name:"Marcus T.", beer:"Coors Banquet",          rating:4, bar_name:"Ziggy's Bar",       city:"Billings",    state:"MT", note:"Sometimes you just need a Banquet. No notes.",             to_go:false },
-  { display_name:"Emma L.",   beer:"Lagunitas IPA",          rating:4, bar_name:"The Back Bar",      city:"Seattle",     state:"WA", note:"Rainy night, great beer, good music. Solid combo.",        to_go:false },
-  { display_name:"Jake M.",   beer:"Three Floyds Zombie Dust",rating:5,bar_name:"The Rusty Anchor",  city:"Chicago",     state:"IL", note:"If you know you know. Best pale ale in the midwest.",      to_go:false },
-  { display_name:"Sara K.",   beer:"Lone Star",              rating:3, bar_name:"The White Horse",   city:"Austin",      state:"TX", note:"It's the national beer of Texas. You drink it. End of story.", to_go:false },
-  { display_name:"Priya S.",  beer:"Shipyard Pumpkinhead",   rating:2, bar_name:"Ri Ra Irish Pub",   city:"Portland",    state:"ME", note:"Fall beer season is a trap. Still drank the whole thing.",  to_go:false },
-  { display_name:"Marcus T.", beer:"Big Sky Moose Drool",    rating:5, bar_name:"The Fieldhouse",    city:"Missoula",    state:"MT", note:"Montana people don't mess around with their brown ales.",   to_go:true  },
-  { display_name:"Emma L.",   beer:"Fremont Lush IPA",       rating:5, bar_name:"Optimism Brewing",  city:"Seattle",     state:"WA", note:"Fresh hop season hits different up here. Unreal.",         to_go:false },
-  { display_name:"Derek P.",  beer:"Sam Adams Boston Lager", rating:4, bar_name:"Cheers Replica Bar",city:"Boston",      state:"MA", note:"Tourist trap but the beer is always cold and I respect it.",to_go:false },
-  { display_name:"Carlos V.", beer:"Breckenridge Avalanche", rating:4, bar_name:"My Brother's Bar",  city:"Denver",      state:"CO", note:"Oldest bar in Denver. Order the Avalanche. Trust me.",      to_go:false },
+  { display_name:"Jake M.",   beer:"Goose Island IPA",        rating:4, bar_name:"The Rusty Anchor", city:"Chicago",   state:"IL", note:"Perfect pour, super chill vibes tonight 🍺",                 to_go:false, likes:14 },
+  { display_name:"Sara K.",   beer:"Modelo Especial",          rating:5, bar_name:"Lola's Cantina",   city:"Austin",    state:"TX", note:"$3 Modelos til 7 — happy hour is undefeated.",               to_go:false, likes:31 },
+  { display_name:"Derek P.",  beer:"Guinness Stout",           rating:5, bar_name:"O'Malley's Pub",   city:"Boston",    state:"MA", note:"Best Guinness outside Dublin. No debate.",                   to_go:false, likes:58 },
+  { display_name:"Mia R.",    beer:"Blue Moon",                rating:3, bar_name:"Rooftop 21",       city:"Nashville", state:"TN", note:"Decent beer, incredible view. Worth it for the vibe.",       to_go:false, likes:22 },
+  { display_name:"Carlos V.", beer:"Dogfish Head 60 Min",      rating:5, bar_name:"Craft & Draft",    city:"Denver",    state:"CO", note:"Ordered this to go on the walk home. Love Colorado 🥡",     to_go:true,  likes:19 },
+  { display_name:"Priya S.",  beer:"Allagash White",           rating:5, bar_name:"The Taproom",      city:"Portland",  state:"ME", note:"This is my happy place. Every. Single. Time.",               to_go:false, likes:27 },
+  { display_name:"Marcus T.", beer:"Coors Banquet",            rating:4, bar_name:"Ziggy's Bar",      city:"Billings",  state:"MT", note:"Sometimes you just need a Banquet. No notes.",               to_go:false, likes:11 },
+  { display_name:"Emma L.",   beer:"Lagunitas IPA",            rating:4, bar_name:"The Back Bar",     city:"Seattle",   state:"WA", note:"Rainy night, great beer, good music. Solid combo.",          to_go:false, likes:9  },
+  { display_name:"Jake M.",   beer:"Three Floyds Zombie Dust", rating:5, bar_name:"The Rusty Anchor", city:"Chicago",   state:"IL", note:"If you know you know. Best pale ale in the midwest.",        to_go:false, likes:44 },
+  { display_name:"Sara K.",   beer:"Lone Star",                rating:3, bar_name:"The White Horse",  city:"Austin",    state:"TX", note:"It's the national beer of Texas. You drink it. End of story.",to_go:false, likes:18 },
+  { display_name:"Priya S.",  beer:"Shipyard Pumpkinhead",     rating:2, bar_name:"The Taproom",      city:"Portland",  state:"ME", note:"Fall beer season is a trap. Still drank the whole thing.",   to_go:false, likes:6  },
+  { display_name:"Marcus T.", beer:"Big Sky Moose Drool",      rating:5, bar_name:"Ziggy's Bar",      city:"Billings",  state:"MT", note:"Montana people don't mess around with their brown ales.",    to_go:true,  likes:33 },
+  { display_name:"Emma L.",   beer:"Fremont Lush IPA",         rating:5, bar_name:"Optimism Brewing", city:"Seattle",   state:"WA", note:"Fresh hop season hits different up here. Unreal.",           to_go:false, likes:41 },
+  { display_name:"Derek P.",  beer:"Sam Adams Boston Lager",   rating:4, bar_name:"O'Malley's Pub",   city:"Boston",    state:"MA", note:"Tourist trap but the beer is always cold and I respect it.", to_go:false, likes:15 },
+  { display_name:"Carlos V.", beer:"Breckenridge Avalanche",   rating:4, bar_name:"Craft & Draft",    city:"Denver",    state:"CO", note:"Oldest bar in Denver. Order the Avalanche. Trust me.",       to_go:false, likes:22 },
 ];
-
 async function seedDemoPosts() {
-  // Use a fake UUID for demo user — posts will show but not be editable
   const demoUserId = "00000000-0000-0000-0000-000000000001";
-  const rows = DEMO_POSTS.map((p, i) => ({
-    ...p,
-    user_id: demoUserId,
-    likes: Math.floor(Math.random() * 40) + 2,
-    place_id: null,
-    created_at: new Date(Date.now() - (i * 18 * 60 * 1000)).toISOString(), // staggered times
+  const rows = DEMO_POSTS.map((p,i)=>({
+    ...p, user_id:demoUserId, place_id:null,
+    created_at: new Date(Date.now()-(i*18*60*1000)).toISOString(),
   }));
   await supabase.from("posts").insert(rows);
 }
 
 // ── Feed tab ──────────────────────────────────────────────────────────────────
-function FeedTab({ location, laws, currentUser, onCheckIn }) {
-  const [posts, setPosts]     = useState([]);
-  const [loading, setLoading] = useState(true);
+function FeedTab({ location, laws, currentUser, onCheckIn, onBarTap }) {
+  const [posts,setPosts]   = useState([]);
+  const [loading,setLoading] = useState(true);
 
   useEffect(() => {
-    // Initial load — seed demo posts if DB is empty
-    supabase.from("posts").select("*").order("created_at", { ascending: false }).limit(50)
-      .then(async ({ data }) => {
-        if (data && data.length === 0) {
+    supabase.from("posts").select("*").order("created_at",{ascending:false}).limit(50)
+      .then(async ({data})=>{
+        if (data&&data.length===0) {
           await seedDemoPosts();
-          const { data: seeded } = await supabase.from("posts").select("*")
-            .order("created_at", { ascending: false }).limit(50);
+          const {data:seeded} = await supabase.from("posts").select("*")
+            .order("created_at",{ascending:false}).limit(50);
           if (seeded) setPosts(seeded);
-        } else if (data) {
-          setPosts(data);
-        }
+        } else if (data) setPosts(data);
         setLoading(false);
       });
-
-    // Realtime subscription
     const channel = supabase.channel("posts-feed")
-      .on("postgres_changes", { event:"INSERT", schema:"public", table:"posts" },
-        payload => setPosts(prev => [payload.new, ...prev]))
+      .on("postgres_changes",{event:"INSERT",schema:"public",table:"posts"},
+        p=>setPosts(prev=>[p.new,...prev]))
       .subscribe();
-
-    return () => supabase.removeChannel(channel);
+    return ()=>supabase.removeChannel(channel);
   }, []);
 
   return (
     <div>
-      {location && laws && (
+      {location&&laws&&(
         <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,
           padding:"10px 14px",marginBottom:12}}>
           <div style={{color:C.cream,fontWeight:700,fontSize:13}}>
@@ -537,98 +720,92 @@ function FeedTab({ location, laws, currentUser, onCheckIn }) {
       <div style={{color:C.muted,fontSize:11,fontWeight:700,letterSpacing:".06em",
         textTransform:"uppercase",marginBottom:10}}>Latest Check-ins</div>
       {loading ? (
-        <div style={{textAlign:"center",padding:40,color:C.muted}}>Loading posts…</div>
-      ) : posts.length === 0 ? (
+        <div style={{textAlign:"center",padding:40,color:C.muted}}>Loading…</div>
+      ) : posts.length===0 ? (
         <div style={{textAlign:"center",padding:40}}>
           <div style={{fontSize:40,marginBottom:10}}>🍺</div>
           <div style={{color:C.cream,fontWeight:700,marginBottom:6}}>No posts yet</div>
-          <div style={{color:C.muted,fontSize:13}}>Be the first to check in!</div>
-          <button onClick={onCheckIn} style={{marginTop:14,background:`linear-gradient(135deg,${C.amber},${C.amberLt})`,
+          <button onClick={onCheckIn} style={{background:`linear-gradient(135deg,${C.amber},${C.amberLt})`,
             color:"#141210",border:"none",borderRadius:10,padding:"10px 20px",
             fontWeight:800,fontSize:14,cursor:"pointer"}}>Check In Now 🍺</button>
         </div>
-      ) : (
-        posts.map(p => <FeedCard key={p.id} post={p} currentUser={currentUser}/>)
-      )}
+      ) : posts.map(p=>(
+        <FeedCard key={p.id} post={p} currentUser={currentUser} onBarTap={onBarTap}/>
+      ))}
     </div>
   );
 }
 
 // ── Nearby tab ────────────────────────────────────────────────────────────────
-function NearbyTab({ location, laws, currentUser }) {
-  const [mapsReady, setMapsReady]   = useState(!!window.google?.maps);
-  const [bars, setBars]             = useState([]);
-  const [loadingBars, setLoadingBars] = useState(false);
-  const [selectedBar, setSelectedBar] = useState(null);
-  const [checkInBar, setCheckInBar] = useState(null);
-  const [mapsError, setMapsError]   = useState(null);
-  const [barPosts, setBarPosts]     = useState({});
-  const mapRef = useRef(null);
-  const mapInstance = useRef(null);
+function NearbyTab({ location, laws, currentUser, onBarTap }) {
+  const [mapsReady,setMapsReady]   = useState(!!window.google?.maps);
+  const [bars,setBars]             = useState([]);
+  const [loadingBars,setLoadingBars] = useState(false);
+  const [selectedBar,setSelectedBar] = useState(null);
+  const [barPosts,setBarPosts]     = useState({});
+  const [mapsError,setMapsError]   = useState(null);
+  const mapRef    = useRef(null);
+  const mapInst   = useRef(null);
   const markersRef = useRef([]);
 
-  useEffect(() => {
-    if (!MAPS_KEY) { setMapsError("Add your Google Maps key to enable this feature."); return; }
+  useEffect(()=>{
+    if (!MAPS_KEY) { setMapsError("Google Maps key not configured."); return; }
     loadGoogleMaps().then(()=>setMapsReady(true)).catch(()=>setMapsError("Failed to load Google Maps"));
-  }, []);
+  },[]);
 
-  useEffect(() => {
-    if (!mapsReady || !location?.lat) return;
+  useEffect(()=>{
+    if (!mapsReady||!location?.lat) return;
     setLoadingBars(true);
-    const tempDiv = document.createElement("div");
-    const map = new window.google.maps.Map(tempDiv);
-    const svc = new window.google.maps.places.PlacesService(map);
-    svc.nearbySearch({ location:{lat:location.lat,lng:location.lng}, radius:1200, type:"bar" },
-      (results, status) => {
+    const tmp = document.createElement("div");
+    const map = new window.google.maps.Map(tmp);
+    new window.google.maps.places.PlacesService(map).nearbySearch(
+      {location:{lat:location.lat,lng:location.lng},radius:1200,type:"bar"},
+      (results,status)=>{
         setLoadingBars(false);
         if (status==="OK") {
-          const top = results.slice(0,12);
-          setBars(top);
-          // Load post counts for each bar
-          const placeIds = top.map(b=>b.place_id).filter(Boolean);
-          if (placeIds.length) {
-            supabase.from("posts").select("place_id").in("place_id", placeIds)
-              .then(({data}) => {
-                const counts = {};
-                (data||[]).forEach(p=>{ counts[p.place_id]=(counts[p.place_id]||0)+1; });
-                setBarPosts(counts);
-              });
-          }
-        } else setMapsError("Places search failed.");
-      });
-  }, [mapsReady, location?.lat, location?.lng]);
+          const top = results.slice(0,12); setBars(top);
+          const ids = top.map(b=>b.place_id).filter(Boolean);
+          if (ids.length) supabase.from("posts").select("place_id").in("place_id",ids)
+            .then(({data})=>{
+              const counts={};
+              (data||[]).forEach(p=>{counts[p.place_id]=(counts[p.place_id]||0)+1;});
+              setBarPosts(counts);
+            });
+        } else setMapsError("Places search failed — make sure Places API is enabled in Google Cloud.");
+      }
+    );
+  },[mapsReady,location?.lat,location?.lng]);
 
   // Map rendering
-  useEffect(() => {
-    if (!mapsReady || !location?.lat || !mapRef.current) return;
-    if (!mapInstance.current) {
-      mapInstance.current = new window.google.maps.Map(mapRef.current, {
-        center:{lat:location.lat,lng:location.lng}, zoom:15,
-        styles:darkMapStyles, disableDefaultUI:true, zoomControl:true,
+  useEffect(()=>{
+    if (!mapsReady||!location?.lat||!mapRef.current) return;
+    if (!mapInst.current) {
+      mapInst.current = new window.google.maps.Map(mapRef.current,{
+        center:{lat:location.lat,lng:location.lng},zoom:15,
+        styles:darkMapStyles,disableDefaultUI:true,zoomControl:true,
       });
     }
-    markersRef.current.forEach(m=>m.setMap(null));
-    markersRef.current = [];
+    markersRef.current.forEach(m=>m.setMap(null)); markersRef.current=[];
     new window.google.maps.Marker({
-      position:{lat:location.lat,lng:location.lng}, map:mapInstance.current,
+      position:{lat:location.lat,lng:location.lng},map:mapInst.current,
       icon:{path:window.google.maps.SymbolPath.CIRCLE,scale:8,
         fillColor:C.amber,fillOpacity:1,strokeColor:"#fff",strokeWeight:2},zIndex:999,
     });
     bars.forEach(bar=>{
-      const count = barPosts[bar.place_id]||0;
-      const isSel = selectedBar?.place_id===bar.place_id;
-      const marker = new window.google.maps.Marker({
-        position:bar.geometry.location, map:mapInstance.current, title:bar.name,
+      const count=barPosts[bar.place_id]||0;
+      const isSel=selectedBar?.place_id===bar.place_id;
+      const m = new window.google.maps.Marker({
+        position:bar.geometry.location,map:mapInst.current,title:bar.name,
         icon:{path:window.google.maps.SymbolPath.CIRCLE,scale:isSel?14:10,
           fillColor:isSel?C.amberLt:C.amber,fillOpacity:1,
           strokeColor:isSel?"#fff":C.card,strokeWeight:isSel?3:2},
         label:count>0?{text:String(count),color:"#111",fontSize:"10px",fontWeight:"bold"}:undefined,
         zIndex:isSel?100:1,
       });
-      marker.addListener("click",()=>setSelectedBar(bar));
-      markersRef.current.push(marker);
+      m.addListener("click",()=>setSelectedBar(bar));
+      markersRef.current.push(m);
     });
-  }, [mapsReady, bars, selectedBar, barPosts, location]);
+  },[mapsReady,bars,selectedBar,barPosts,location]);
 
   if (!location?.lat) return (
     <div style={{textAlign:"center",padding:"40px 20px"}}>
@@ -639,7 +816,7 @@ function NearbyTab({ location, laws, currentUser }) {
   );
 
   if (mapsError) return (
-    <div style={{background:"#201515",border:`1px solid ${C.red}33`,borderRadius:12,padding:16}}>
+    <div style={{background:"#201515",border:`1px solid ${C.red}33`,borderRadius:12,padding:16,margin:4}}>
       <div style={{color:C.red,fontWeight:700,marginBottom:4}}>Maps unavailable</div>
       <div style={{color:C.muted,fontSize:13}}>{mapsError}</div>
     </div>
@@ -647,12 +824,12 @@ function NearbyTab({ location, laws, currentUser }) {
 
   return (
     <div>
-      <div ref={mapRef} style={{width:"100%",height:240,borderRadius:12,overflow:"hidden",marginBottom:12,
-        background:C.card,display:"flex",alignItems:"center",justifyContent:"center"}}>
-        {!mapsReady && <span style={{color:C.muted}}>Loading map…</span>}
+      <div ref={mapRef} style={{width:"100%",height:240,borderRadius:12,overflow:"hidden",
+        marginBottom:12,background:C.card}}>
+        {!mapsReady&&<div style={{height:"100%",display:"flex",alignItems:"center",
+          justifyContent:"center",color:C.muted}}>Loading map…</div>}
       </div>
-
-      {laws && (
+      {laws&&(
         <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,
           padding:"10px 14px",marginBottom:12}}>
           <div style={{color:C.cream,fontWeight:700,fontSize:13}}>
@@ -661,17 +838,19 @@ function NearbyTab({ location, laws, currentUser }) {
           <LawBadges laws={laws}/>
         </div>
       )}
-
       {loadingBars ? (
         <div style={{textAlign:"center",padding:30,color:C.muted}}>Finding bars near you…</div>
       ) : bars.map(bar=>{
-        const count = barPosts[bar.place_id]||0;
-        const isSel = selectedBar?.place_id===bar.place_id;
+        const count=barPosts[bar.place_id]||0;
+        const isSel=selectedBar?.place_id===bar.place_id;
+        const avgRating = null; // could load per-bar if needed
         return (
-          <div key={bar.place_id} onClick={()=>setSelectedBar(bar)}
+          <div key={bar.place_id}
+            onClick={()=>onBarTap({bar_name:bar.name,place_id:bar.place_id,state:location?.state})}
             style={{background:isSel?"#242018":C.card,
               border:`1px solid ${isSel?C.amber+"66":C.border}`,
-              borderRadius:12,padding:"12px 14px",marginBottom:9,cursor:"pointer"}}>
+              borderRadius:12,padding:"12px 14px",marginBottom:9,cursor:"pointer",
+              transition:"all .15s"}}>
             <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between"}}>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{color:C.cream,fontWeight:700,fontSize:14}}>{bar.name}</div>
@@ -692,107 +871,27 @@ function NearbyTab({ location, laws, currentUser }) {
               <div style={{textAlign:"right",flexShrink:0,marginLeft:10}}>
                 {count>0&&<div style={{color:C.amber,fontWeight:800,fontSize:18}}>{count}</div>}
                 <div style={{color:C.muted,fontSize:10}}>{count>0?"posts":"no posts"}</div>
+                <div style={{color:C.blue,fontSize:10,marginTop:2}}>View →</div>
               </div>
             </div>
           </div>
         );
       })}
-
-      {/* Bar detail sheet */}
-      {selectedBar && (
-        <BarSheet bar={selectedBar} laws={laws} currentUser={currentUser}
-          onClose={()=>setSelectedBar(null)}
-          onCheckIn={()=>{ setCheckInBar(selectedBar); setSelectedBar(null); }}/>
-      )}
-
-      {checkInBar && (
-        <CheckInModal onClose={()=>setCheckInBar(null)} onPost={()=>setCheckInBar(null)}
-          location={location} laws={laws} currentUser={currentUser}
-          preselectedBar={checkInBar.name}/>
-      )}
-    </div>
-  );
-}
-
-// ── Bar sheet ─────────────────────────────────────────────────────────────────
-function BarSheet({ bar, laws, currentUser, onClose, onCheckIn }) {
-  const [posts, setPosts] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    supabase.from("posts").select("*").eq("place_id", bar.place_id)
-      .order("created_at", { ascending:false })
-      .then(({data}) => { if(data) setPosts(data); setLoading(false); });
-  }, [bar.place_id]);
-
-  return (
-    <div style={{position:"fixed",inset:0,zIndex:90,background:"rgba(0,0,0,0.72)",
-      backdropFilter:"blur(3px)",display:"flex",alignItems:"flex-end",justifyContent:"center"}}
-      onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div style={{background:C.card,borderRadius:"18px 18px 0 0",width:"100%",maxWidth:480,
-        maxHeight:"80vh",display:"flex",flexDirection:"column",border:`1px solid ${C.border}`}}>
-        <div style={{width:36,height:4,background:"#3A3228",borderRadius:2,margin:"14px auto 0"}}/>
-        <div style={{padding:"14px 16px 10px",borderBottom:`1px solid ${C.border}`}}>
-          <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:10}}>
-            <div style={{flex:1}}>
-              <div style={{color:C.cream,fontWeight:800,fontSize:17}}>{bar.name}</div>
-              <div style={{color:C.muted,fontSize:12,marginTop:2}}>{bar.vicinity}</div>
-              <div style={{display:"flex",alignItems:"center",gap:8,marginTop:4}}>
-                {bar.rating&&<span style={{color:C.amber,fontWeight:700,fontSize:13}}>★ {bar.rating}</span>}
-                {bar.opening_hours?.open_now!==undefined&&(
-                  <span style={{fontSize:11,fontWeight:700,
-                    color:bar.opening_hours.open_now?C.green:C.red}}>
-                    {bar.opening_hours.open_now?"● Open":"● Closed"}
-                  </span>
-                )}
-                <span style={{color:C.muted,fontSize:11}}>{posts.length} post{posts.length!==1?"s":""}</span>
-              </div>
-            </div>
-            <button onClick={onCheckIn} style={{background:`linear-gradient(135deg,${C.amber},${C.amberLt})`,
-              color:"#141210",border:"none",borderRadius:10,padding:"9px 13px",
-              fontSize:12,fontWeight:800,cursor:"pointer",flexShrink:0}}>🍺 Check In</button>
-          </div>
-          <LawBadges laws={laws}/>
-        </div>
-        <div style={{overflowY:"auto",padding:"10px 14px 20px",flex:1}}>
-          {loading ? <div style={{textAlign:"center",padding:30,color:C.muted}}>Loading…</div>
-          : posts.length===0 ? (
-            <div style={{textAlign:"center",padding:"28px 0"}}>
-              <div style={{fontSize:34,marginBottom:8}}>🍺</div>
-              <div style={{color:C.muted,fontSize:13}}>No check-ins yet — be the first!</div>
-            </div>
-          ) : posts.map((p,i)=>(
-            <div key={i} style={{background:"#161208",borderRadius:10,padding:"10px 12px",
-              marginBottom:8,border:`1px solid ${C.border}`}}>
-              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
-                <InitialsAvatar name={p.display_name} size={28}/>
-                <span style={{color:C.cream,fontWeight:700,fontSize:13}}>{p.display_name}</span>
-                <span style={{color:C.muted,fontSize:11,marginLeft:"auto"}}>
-                  {Math.floor((Date.now()-new Date(p.created_at))/60000)}m ago
-                </span>
-              </div>
-              <div style={{color:C.amber,fontWeight:700,fontSize:13,marginBottom:3}}>{p.beer}</div>
-              <StarRow value={p.rating}/>
-              {p.note&&<p style={{color:C.cream,fontSize:12,margin:"6px 0 0",lineHeight:1.5}}>{p.note}</p>}
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }
 
 // ── Profile tab ───────────────────────────────────────────────────────────────
-function ProfileTab({ currentUser, onLogout }) {
-  const [posts, setPosts]   = useState([]);
-  const [loading, setLoading] = useState(true);
-  const displayName = currentUser?.user_metadata?.display_name || currentUser?.email?.split("@")[0] || "You";
+function ProfileTab({ currentUser, onLogout, onBarTap }) {
+  const [posts,setPosts]   = useState([]);
+  const [loading,setLoading] = useState(true);
+  const displayName = currentUser?.user_metadata?.display_name || currentUser?.email?.split("@")[0]||"You";
 
-  useEffect(() => {
-    supabase.from("posts").select("*").eq("user_id", currentUser.id)
+  useEffect(()=>{
+    supabase.from("posts").select("*").eq("user_id",currentUser.id)
       .order("created_at",{ascending:false})
       .then(({data})=>{ if(data) setPosts(data); setLoading(false); });
-  }, [currentUser.id]);
+  },[currentUser.id]);
 
   const badges = [
     {icon:"🍺",label:"First Pour",  earned:posts.length>=1},
@@ -823,7 +922,6 @@ function ProfileTab({ currentUser, onLogout }) {
           border:`1px solid ${C.border}`,borderRadius:8,padding:"5px 18px",
           color:C.muted,fontSize:12,cursor:"pointer"}}>Sign Out</button>
       </div>
-
       <div style={{color:C.muted,fontSize:11,fontWeight:700,letterSpacing:".06em",
         textTransform:"uppercase",marginBottom:9}}>Badges</div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:9,marginBottom:16}}>
@@ -836,16 +934,14 @@ function ProfileTab({ currentUser, onLogout }) {
           </div>
         ))}
       </div>
-
       <div style={{color:C.muted,fontSize:11,fontWeight:700,letterSpacing:".06em",
         textTransform:"uppercase",marginBottom:9}}>Your Check-ins</div>
       {loading ? <div style={{color:C.muted,fontSize:13,textAlign:"center",padding:20}}>Loading…</div>
-      : posts.length===0 ? (
-        <div style={{color:C.muted,fontSize:13,textAlign:"center",padding:20}}>No check-ins yet!</div>
-      ) : posts.map(p=>(
-        <div key={p.id} style={{background:C.card,border:`1px solid ${C.border}`,
-          borderRadius:10,padding:"10px 14px",marginBottom:8,
-          display:"flex",alignItems:"center",gap:10}}>
+      : posts.length===0 ? <div style={{color:C.muted,fontSize:13,textAlign:"center",padding:20}}>No check-ins yet!</div>
+      : posts.map(p=>(
+        <div key={p.id} onClick={()=>onBarTap?.(p)}
+          style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:10,
+          padding:"10px 14px",marginBottom:8,display:"flex",alignItems:"center",gap:10,cursor:"pointer"}}>
           <span style={{fontSize:18}}>🍺</span>
           <div style={{flex:1,minWidth:0}}>
             <div style={{color:C.amber,fontWeight:700,fontSize:13}}>{p.beer}</div>
@@ -862,8 +958,8 @@ function ProfileTab({ currentUser, onLogout }) {
 
 // ── State picker ──────────────────────────────────────────────────────────────
 function StatePickerModal({ onSelect, onClose }) {
-  const [q,setQ] = useState("");
-  const list = US_STATES.filter(s=>s.name.toLowerCase().includes(q.toLowerCase())||s.code.includes(q.toUpperCase()));
+  const [q,setQ]=useState("");
+  const list=US_STATES.filter(s=>s.name.toLowerCase().includes(q.toLowerCase())||s.code.includes(q.toUpperCase()));
   return (
     <div style={{position:"fixed",inset:0,zIndex:200,background:"rgba(0,0,0,0.85)",
       display:"flex",alignItems:"center",justifyContent:"center",padding:20}}
@@ -872,7 +968,8 @@ function StatePickerModal({ onSelect, onClose }) {
         maxHeight:"80vh",display:"flex",flexDirection:"column",border:`1px solid ${C.border}`}}>
         <div style={{padding:"14px 14px 0"}}>
           <div style={{color:C.cream,fontWeight:800,fontSize:15,marginBottom:10}}>Select your state</div>
-          <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search…" style={{...inp(false),marginBottom:8}}/>
+          <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search…"
+            style={{...inp(false),marginBottom:8}}/>
         </div>
         <div style={{overflowY:"auto",padding:"0 8px 14px"}}>
           {list.map(s=>{
@@ -914,45 +1011,42 @@ const darkMapStyles = [
 
 // ── Root app ──────────────────────────────────────────────────────────────────
 export default function App() {
-  const [session, setSession]       = useState(null);
-  const [authLoading, setAuthLoading] = useState(true);
-  const [tab, setTab]               = useState("feed");
-  const [showModal, setShowModal]   = useState(false);
-  const [showPicker, setShowPicker] = useState(false);
-  const [location, setLocation]     = useState(null);
-  const [gpsLoading, setGpsLoading] = useState(false);
+  const [session,setSession]         = useState(null);
+  const [authLoading,setAuthLoading] = useState(true);
+  const [tab,setTab]                 = useState("feed");
+  const [showModal,setShowModal]     = useState(false);
+  const [showPicker,setShowPicker]   = useState(false);
+  const [location,setLocation]       = useState(null);
+  const [barPage,setBarPage]         = useState(null); // { bar_name, place_id, state }
 
   const laws = location?.state ? STATE_LAWS[location.state] : null;
+  const barLaws = barPage?.state ? STATE_LAWS[barPage.state] : laws;
 
-  // Auth listener
-  useEffect(() => {
-    supabase.auth.getSession().then(({data:{session}}) => {
-      setSession(session); setAuthLoading(false);
-    });
-    const {data:{subscription}} = supabase.auth.onAuthStateChange((_,session) => {
-      setSession(session); setAuthLoading(false);
-    });
-    return () => subscription.unsubscribe();
-  }, []);
+  useEffect(()=>{
+    supabase.auth.getSession().then(({data:{session}})=>{ setSession(session); setAuthLoading(false); });
+    const {data:{subscription}} = supabase.auth.onAuthStateChange((_,s)=>{ setSession(s); setAuthLoading(false); });
+    return ()=>subscription.unsubscribe();
+  },[]);
 
-  // GPS
-  const requestGPS = useCallback(() => {
+  const requestGPS = useCallback(()=>{
     if (!navigator.geolocation) { setShowPicker(true); return; }
-    setGpsLoading(true);
     navigator.geolocation.getCurrentPosition(
-      async pos => {
-        const {latitude:lat, longitude:lng} = pos.coords;
-        const geo = await reverseGeocode(lat, lng);
-        setGpsLoading(false);
-        if (geo?.state && STATE_LAWS[geo.state]) setLocation({...geo,lat,lng});
+      async pos=>{
+        const {latitude:lat,longitude:lng}=pos.coords;
+        const geo=await reverseGeocode(lat,lng);
+        if (geo?.state&&STATE_LAWS[geo.state]) setLocation({...geo,lat,lng});
         else setShowPicker(true);
       },
-      () => { setGpsLoading(false); setShowPicker(true); },
+      ()=>setShowPicker(true),
       {timeout:10000}
     );
-  }, []);
+  },[]);
 
-  useEffect(() => { if (session) requestGPS(); }, [session]);
+  useEffect(()=>{ if(session) requestGPS(); },[session]);
+
+  function handleBarTap(post) {
+    setBarPage({ bar_name: post.bar_name, place_id: post.place_id||null, state: post.state||location?.state });
+  }
 
   if (authLoading) return (
     <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",
@@ -964,9 +1058,9 @@ export default function App() {
     </div>
   );
 
-  if (!session) return <AuthScreen onAuth={()=>{}} />;
+  if (!session) return <AuthScreen/>;
 
-  const TABS = [{key:"feed",icon:"🍻",label:"Feed"},{key:"nearby",icon:"📍",label:"Nearby"},{key:"profile",icon:"👤",label:"Profile"}];
+  const TABS=[{key:"feed",icon:"🍻",label:"Feed"},{key:"nearby",icon:"📍",label:"Nearby"},{key:"profile",icon:"👤",label:"Profile"}];
 
   return (
     <div style={{minHeight:"100vh",background:C.bg,
@@ -991,9 +1085,9 @@ export default function App() {
       </div>
 
       <div style={{flex:1,padding:"13px 13px 80px",overflowY:"auto"}}>
-        {tab==="feed"    && <FeedTab location={location} laws={laws} currentUser={session.user} onCheckIn={()=>setShowModal(true)}/>}
-        {tab==="nearby"  && <NearbyTab location={location} laws={laws} currentUser={session.user}/>}
-        {tab==="profile" && <ProfileTab currentUser={session.user} onLogout={()=>supabase.auth.signOut()}/>}
+        {tab==="feed"    && <FeedTab location={location} laws={laws} currentUser={session.user} onCheckIn={()=>setShowModal(true)} onBarTap={handleBarTap}/>}
+        {tab==="nearby"  && <NearbyTab location={location} laws={laws} currentUser={session.user} onBarTap={handleBarTap}/>}
+        {tab==="profile" && <ProfileTab currentUser={session.user} onLogout={()=>supabase.auth.signOut()} onBarTap={handleBarTap}/>}
       </div>
 
       <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",
@@ -1009,6 +1103,14 @@ export default function App() {
           </button>
         ))}
       </div>
+
+      {/* Bar page — slides over everything */}
+      {barPage && (
+        <BarPage
+          barName={barPage.bar_name} placeId={barPage.place_id}
+          laws={barLaws} currentUser={session.user} location={location}
+          onBack={()=>setBarPage(null)}/>
+      )}
 
       {showModal && (
         <CheckInModal onClose={()=>setShowModal(false)} onPost={()=>setShowModal(false)}
