@@ -484,42 +484,63 @@ function CommentThread({ postId, currentUser }) {
 
 // ── Post actions row (likes + comments, shared by FeedCard and BarPostCard) ──
 function PostActions({ post, currentUser, showComments, onToggleComments }) {
-  const isOwn   = post.user_id === currentUser?.id;
-  const [liked,  setLiked]  = useState(false);
-  const [likes,  setLikes]  = useState(post.likes || 0);
-  const [commentCount, setCommentCount] = useState(post.comment_count || 0);
+  const isOwn = post.user_id === currentUser?.id;
+  const [liked, setLiked]   = useState(false);
+  const [likes, setLikes]   = useState(post.likes || 0);
+  const [busy,  setBusy]    = useState(false);
+  const [commentCount]      = useState(post.comment_count || 0);
 
-  // Check if already liked on mount
+  // On mount: check if current user already liked this post, and fetch real like count
   useEffect(() => {
     if (!currentUser || isOwn) return;
-    supabase.from("likes").select("id").match({ post_id:post.id, user_id:currentUser.id }).single()
-      .then(({ data }) => { if (data) setLiked(true); });
+    // Fetch actual like count + whether user liked
+    Promise.all([
+      supabase.from("posts").select("likes").eq("id", post.id).single(),
+      supabase.from("likes").select("id").match({ post_id:post.id, user_id:currentUser.id }).maybeSingle(),
+    ]).then(([countRes, likedRes]) => {
+      if (countRes.data) setLikes(countRes.data.likes || 0);
+      if (likedRes.data) setLiked(true);
+    });
   }, [post.id, currentUser?.id]);
 
   async function handleLike() {
-    if (isOwn || !currentUser) return;
+    if (isOwn || !currentUser || busy) return;
+    setBusy(true);
     if (!liked) {
-      setLiked(true); setLikes(l => l+1);
-      await supabase.from("likes").insert({ post_id:post.id, user_id:currentUser.id });
-      await supabase.from("posts").update({ likes: likes+1 }).eq("id", post.id);
+      // Optimistic update
+      setLiked(true);
+      setLikes(l => l + 1);
+      const { error } = await supabase.from("likes").insert({ post_id:post.id, user_id:currentUser.id });
+      if (!error) {
+        await supabase.rpc("increment_likes", { post_id: post.id });
+      } else {
+        // Rollback if insert failed (e.g. duplicate)
+        setLiked(false);
+        setLikes(l => l - 1);
+      }
     } else {
-      setLiked(false); setLikes(l => l-1);
+      setLiked(false);
+      setLikes(l => Math.max(0, l - 1));
       await supabase.from("likes").delete().match({ post_id:post.id, user_id:currentUser.id });
-      await supabase.from("posts").update({ likes: likes-1 }).eq("id", post.id);
+      await supabase.rpc("decrement_likes", { post_id: post.id });
     }
+    setBusy(false);
   }
 
   return (
     <div style={{paddingTop:8,borderTop:`1px solid ${C.border}`}}>
       <div style={{display:"flex",gap:14}}>
         {/* Like button */}
-        <button onClick={handleLike}
+        <button onClick={handleLike} disabled={busy}
           title={isOwn ? "Can't like your own post" : liked ? "Unlike" : "Like"}
-          style={{background:"none",border:"none",cursor:isOwn?"default":"pointer",padding:0,
+          style={{background:"none",border:"none",
+            cursor: isOwn||busy ? "default" : "pointer", padding:0,
             color: liked ? C.amber : isOwn ? C.border : C.muted,
-            fontSize:13,fontWeight:liked?700:400,display:"flex",alignItems:"center",gap:4,
+            fontSize:13, fontWeight:liked?700:400,
+            display:"flex", alignItems:"center", gap:4,
             opacity: isOwn ? 0.4 : 1}}>
-          🍻 {likes}{isOwn && <span style={{fontSize:10,color:C.muted,marginLeft:2}}>(yours)</span>}
+          🍻 {likes}
+          {isOwn && <span style={{fontSize:10,color:C.muted,marginLeft:2}}>(yours)</span>}
         </button>
 
         {/* Comment toggle */}

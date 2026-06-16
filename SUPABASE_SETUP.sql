@@ -116,3 +116,16 @@ create trigger on_comment_delete after delete on public.comments
 
 -- Enable realtime on comments
 alter publication supabase_realtime add table public.comments;
+
+-- ── Run this block to fix like counts ───────────────────────────────────────
+
+-- Safe increment/decrement functions so likes never go negative
+create or replace function public.increment_likes(post_id uuid)
+returns void as $$
+  update public.posts set likes = likes + 1 where id = post_id;
+$$ language sql security definer;
+
+create or replace function public.decrement_likes(post_id uuid)
+returns void as $$
+  update public.posts set likes = greatest(likes - 1, 0) where id = post_id;
+$$ language sql security definer;
