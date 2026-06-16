@@ -1412,22 +1412,24 @@ export default function App() {
 }
 
 // ── User profile page ────────────────────────────────────────────────────────
-function UserPage({ userId, displayName, currentUser, onBack, onBarTap, onPostTap }) {
-  const [posts, setPosts]           = useState([]);
-  const [loading, setLoading]       = useState(true);
-  const [friendship, setFriendship] = useState(null); // null | {id, status, iRequested}
+function UserPage({ userId, displayName, currentUser, onBack, onBarTap, onPostTap, onUserTap }) {
+  const [posts, setPosts]             = useState([]);
+  const [loading, setLoading]         = useState(true);
+  const [friendship, setFriendship]   = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
 
   const isMe = userId === currentUser?.id;
 
   useEffect(() => {
-    // Load their posts
+    setLoading(true);
+    setPosts([]);
+    setFriendship(null);
+
     supabase.from("posts").select("*").eq("user_id", userId)
       .order("created_at", { ascending:false })
       .then(({ data }) => { if (data) setPosts(data); setLoading(false); });
 
-    // Load friendship status
-    if (!isMe) {
+    if (!isMe && currentUser?.id) {
       supabase.from("friendships").select("*")
         .or(`and(requester_id.eq.${currentUser.id},addressee_id.eq.${userId}),and(requester_id.eq.${userId},addressee_id.eq.${currentUser.id})`)
         .maybeSingle()
@@ -1464,48 +1466,53 @@ function UserPage({ userId, displayName, currentUser, onBack, onBarTap, onPostTa
     ? (posts.reduce((s,p) => s + p.rating, 0) / posts.length).toFixed(1)
     : null;
   const uniqueBars = new Set(posts.map(p => p.bar_name)).size;
+  const name = displayName || "User";
 
-  // Friend action button
-  function FriendButton() {
-    if (isMe) return null;
-    if (!friendship) return (
-      <button onClick={sendRequest} disabled={actionLoading}
-        style={{background:`linear-gradient(135deg,${C.amber},${C.amberLt})`,
-          color:"#141210",border:"none",borderRadius:10,padding:"9px 18px",
-          fontWeight:800,fontSize:13,cursor:"pointer"}}>
-        {actionLoading ? "…" : "Add Friend 🍻"}
-      </button>
-    );
-    if (friendship.status === "pending" && friendship.iRequested) return (
-      <button onClick={removeFriend} disabled={actionLoading}
-        style={{background:"none",border:`1px solid ${C.border}`,borderRadius:10,
-          padding:"9px 18px",color:C.muted,fontSize:13,cursor:"pointer",fontWeight:600}}>
-        {actionLoading ? "…" : "Request Sent"}
-      </button>
-    );
-    if (friendship.status === "pending" && !friendship.iRequested) return (
-      <div style={{display:"flex",gap:8}}>
-        <button onClick={acceptRequest} disabled={actionLoading}
+  // Inline friend button — NOT a nested component, just a variable
+  let friendBtn = null;
+  if (!isMe) {
+    if (!friendship) {
+      friendBtn = (
+        <button onClick={sendRequest} disabled={actionLoading}
           style={{background:`linear-gradient(135deg,${C.amber},${C.amberLt})`,
-            color:"#141210",border:"none",borderRadius:10,padding:"9px 16px",
+            color:"#141210",border:"none",borderRadius:10,padding:"9px 18px",
             fontWeight:800,fontSize:13,cursor:"pointer"}}>
-          {actionLoading ? "…" : "Accept 🍻"}
+          {actionLoading ? "…" : "Add Friend 🍻"}
         </button>
+      );
+    } else if (friendship.status === "pending" && friendship.iRequested) {
+      friendBtn = (
         <button onClick={removeFriend} disabled={actionLoading}
           style={{background:"none",border:`1px solid ${C.border}`,borderRadius:10,
-            padding:"9px 14px",color:C.muted,fontSize:13,cursor:"pointer"}}>
-          Decline
+            padding:"9px 18px",color:C.muted,fontSize:13,cursor:"pointer",fontWeight:600}}>
+          {actionLoading ? "…" : "Request Sent"}
         </button>
-      </div>
-    );
-    if (friendship.status === "accepted") return (
-      <button onClick={removeFriend} disabled={actionLoading}
-        style={{background:"none",border:`1px solid ${C.amber}44`,borderRadius:10,
-          padding:"9px 18px",color:C.amber,fontSize:13,cursor:"pointer",fontWeight:700}}>
-        {actionLoading ? "…" : "🍻 Friends"}
-      </button>
-    );
-    return null;
+      );
+    } else if (friendship.status === "pending" && !friendship.iRequested) {
+      friendBtn = (
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={acceptRequest} disabled={actionLoading}
+            style={{background:`linear-gradient(135deg,${C.amber},${C.amberLt})`,
+              color:"#141210",border:"none",borderRadius:10,padding:"9px 16px",
+              fontWeight:800,fontSize:13,cursor:"pointer"}}>
+            {actionLoading ? "…" : "Accept 🍻"}
+          </button>
+          <button onClick={removeFriend} disabled={actionLoading}
+            style={{background:"none",border:`1px solid ${C.border}`,borderRadius:10,
+              padding:"9px 14px",color:C.muted,fontSize:13,cursor:"pointer"}}>
+            Decline
+          </button>
+        </div>
+      );
+    } else if (friendship.status === "accepted") {
+      friendBtn = (
+        <button onClick={removeFriend} disabled={actionLoading}
+          style={{background:"none",border:`1px solid ${C.amber}44`,borderRadius:10,
+            padding:"9px 18px",color:C.amber,fontSize:13,cursor:"pointer",fontWeight:700}}>
+          {actionLoading ? "…" : "🍻 Friends"}
+        </button>
+      );
+    }
   }
 
   return (
@@ -1513,44 +1520,33 @@ function UserPage({ userId, displayName, currentUser, onBack, onBarTap, onPostTa
       display:"flex",flexDirection:"column",
       fontFamily:"'Inter',-apple-system,sans-serif"}}>
 
-      {/* Header */}
       <div style={{background:C.card,borderBottom:`1px solid ${C.border}`,
         padding:"14px 16px",display:"flex",alignItems:"center",gap:12,
         position:"sticky",top:0,zIndex:10}}>
         <button onClick={onBack} style={{background:"none",border:"none",
           color:C.amber,fontSize:22,cursor:"pointer",padding:0,lineHeight:1}}>‹</button>
-        <div style={{color:C.cream,fontWeight:800,fontSize:16}}>{displayName}</div>
+        <div style={{color:C.cream,fontWeight:800,fontSize:16}}>{name}</div>
       </div>
 
       <div style={{flex:1,overflowY:"auto",padding:"14px 14px 40px"}}>
-
-        {/* Profile card */}
         <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,
           padding:"20px 16px",marginBottom:14,textAlign:"center"}}>
-          <InitialsAvatar name={displayName} size={64}/>
-          <div style={{color:C.cream,fontWeight:800,fontSize:20,marginTop:10}}>{displayName}</div>
-
-          {/* Stats */}
+          <InitialsAvatar name={name} size={64}/>
+          <div style={{color:C.cream,fontWeight:800,fontSize:20,marginTop:10}}>{name}</div>
           <div style={{display:"flex",justifyContent:"center",gap:24,marginTop:16,marginBottom:16}}>
-            {[
-              ["Beers", posts.length],
-              ["Bars",  uniqueBars],
-              ["Avg ★", avgRating || "—"],
-            ].map(([l,v]) => (
+            {[["Beers",posts.length],["Bars",uniqueBars],["Avg ★",avgRating||"—"]].map(([l,v]) => (
               <div key={l} style={{textAlign:"center"}}>
                 <div style={{color:C.amber,fontSize:20,fontWeight:800}}>{v}</div>
                 <div style={{color:C.muted,fontSize:11}}>{l}</div>
               </div>
             ))}
           </div>
-
-          <FriendButton/>
+          {friendBtn}
         </div>
 
-        {/* Their posts */}
         <div style={{color:C.muted,fontSize:11,fontWeight:700,letterSpacing:".06em",
           textTransform:"uppercase",marginBottom:10}}>
-          {isMe ? "Your Check-ins" : `${displayName.split(" ")[0]}'s Check-ins`}
+          {isMe ? "Your Check-ins" : `${name.split(" ")[0]}'s Check-ins`}
         </div>
 
         {loading ? (
@@ -1562,13 +1558,13 @@ function UserPage({ userId, displayName, currentUser, onBack, onBarTap, onPostTa
           </div>
         ) : posts.map(p => (
           <FeedCard key={p.id} post={p} currentUser={currentUser}
-            onBarTap={onBarTap} onPostTap={onPostTap}
-            onUserTap={onUserTap}/>
+            onBarTap={onBarTap} onPostTap={onPostTap} onUserTap={onUserTap}/>
         ))}
       </div>
     </div>
   );
 }
+
 
 // ═══════════════════════════════════════════════════════════════════════════
 // FRIENDS SYSTEM
@@ -1769,7 +1765,7 @@ function FriendsPage({ currentUser, onBack, onUserTap, friends, incoming, outgoi
               </div>
               <div style={{flex:1,cursor:"pointer"}} onClick={()=>onUserTap?.({id:f.id,display_name:f.display_name})}>
                 <div style={{color:C.cream,fontWeight:700,fontSize:14}}>{f.display_name||"Unknown"}</div>
-                <div style={{color:C.muted,fontSize:11,marginTop:2}}>🍺 Friend</div>
+                <div style={{color:C.amber,fontSize:11,marginTop:2}}>View profile →</div>
               </div>
               <button onClick={()=>removeFriend(f.friendshipId, f.id)}
                 disabled={actionLoading[f.id]}
@@ -1797,7 +1793,7 @@ function FriendsPage({ currentUser, onBack, onUserTap, friends, incoming, outgoi
                     </div>
                     <div style={{flex:1,cursor:"pointer"}} onClick={()=>onUserTap?.({id:f.id,display_name:f.display_name})}>
                       <div style={{color:C.cream,fontWeight:700,fontSize:14}}>{f.display_name||"Someone"}</div>
-                      <div style={{color:C.muted,fontSize:11,marginTop:2}}>wants to be friends</div>
+                      <div style={{color:C.amber,fontSize:11,marginTop:2}}>View profile →</div>
                     </div>
                     <div style={{display:"flex",gap:6}}>
                       <button onClick={()=>acceptRequest(f.friendshipId, f.id)}
