@@ -484,16 +484,14 @@ function CommentThread({ postId, currentUser }) {
 
 // ── Post actions row (likes + comments, shared by FeedCard and BarPostCard) ──
 function PostActions({ post, currentUser, showComments, onToggleComments }) {
-  const isOwn = post.user_id === currentUser?.id;
-  const [liked, setLiked]   = useState(false);
-  const [likes, setLikes]   = useState(post.likes || 0);
-  const [busy,  setBusy]    = useState(false);
-  const [commentCount]      = useState(post.comment_count || 0);
+  const [liked, setLiked] = useState(false);
+  const [likes, setLikes] = useState(post.likes || 0);
+  const [busy,  setBusy]  = useState(false);
+  const [commentCount]    = useState(post.comment_count || 0);
 
-  // On mount: check if current user already liked this post, and fetch real like count
+  // Fetch real like count + whether current user has liked
   useEffect(() => {
-    if (!currentUser || isOwn) return;
-    // Fetch actual like count + whether user liked
+    if (!currentUser) return;
     Promise.all([
       supabase.from("posts").select("likes").eq("id", post.id).single(),
       supabase.from("likes").select("id").match({ post_id:post.id, user_id:currentUser.id }).maybeSingle(),
@@ -504,17 +502,15 @@ function PostActions({ post, currentUser, showComments, onToggleComments }) {
   }, [post.id, currentUser?.id]);
 
   async function handleLike() {
-    if (isOwn || !currentUser || busy) return;
+    if (!currentUser || busy) return;
     setBusy(true);
     if (!liked) {
-      // Optimistic update
       setLiked(true);
       setLikes(l => l + 1);
       const { error } = await supabase.from("likes").insert({ post_id:post.id, user_id:currentUser.id });
       if (!error) {
         await supabase.rpc("increment_likes", { post_id: post.id });
       } else {
-        // Rollback if insert failed (e.g. duplicate)
         setLiked(false);
         setLikes(l => l - 1);
       }
@@ -530,20 +526,14 @@ function PostActions({ post, currentUser, showComments, onToggleComments }) {
   return (
     <div style={{paddingTop:8,borderTop:`1px solid ${C.border}`}}>
       <div style={{display:"flex",gap:14}}>
-        {/* Like button */}
         <button onClick={handleLike} disabled={busy}
-          title={isOwn ? "Can't like your own post" : liked ? "Unlike" : "Like"}
           style={{background:"none",border:"none",
-            cursor: isOwn||busy ? "default" : "pointer", padding:0,
-            color: liked ? C.amber : isOwn ? C.border : C.muted,
+            cursor:busy?"default":"pointer", padding:0,
+            color:liked?C.amber:C.muted,
             fontSize:13, fontWeight:liked?700:400,
-            display:"flex", alignItems:"center", gap:4,
-            opacity: isOwn ? 0.4 : 1}}>
+            display:"flex", alignItems:"center", gap:4}}>
           🍻 {likes}
-          {isOwn && <span style={{fontSize:10,color:C.muted,marginLeft:2}}>(yours)</span>}
         </button>
-
-        {/* Comment toggle */}
         <button onClick={onToggleComments}
           style={{background:"none",border:"none",cursor:"pointer",padding:0,
             color:showComments?C.amber:C.muted,fontSize:13,
