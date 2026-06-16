@@ -1279,7 +1279,7 @@ export default function App() {
 
   useEffect(()=>{ if(session) requestGPS(); },[session]);
 
-  const { friends, incoming, reload: reloadFriends } = useFriends(session?.user);
+  const { friends, incoming, outgoing, reload: reloadFriends } = useFriends(session?.user);
   const friendIds = new Set(friends.map(f => f.id));
 
   function handleBarTap(post) {
@@ -1351,7 +1351,12 @@ export default function App() {
 
       {/* Friends page */}
       {friendsPage && (
-        <FriendsPage currentUser={session.user} onBack={()=>{ setFriendsPage(false); reloadFriends(); }} onUserTap={u=>setUserPage(u)}/>
+        <FriendsPage
+          currentUser={session.user}
+          friends={friends} incoming={incoming} outgoing={outgoing}
+          loading={false} reload={reloadFriends}
+          onBack={()=>setFriendsPage(false)}
+          onUserTap={u=>setUserPage(u)}/>
       )}
 
       {/* User profile page */}
@@ -1650,8 +1655,7 @@ async function searchUsers(query, currentUserId) {
 }
 
 // ── Friends page ──────────────────────────────────────────────────────────────
-function FriendsPage({ currentUser, onBack, onUserTap }) {
-  const { friends, incoming, outgoing, loading, reload } = useFriends(currentUser);
+function FriendsPage({ currentUser, onBack, onUserTap, friends, incoming, outgoing, loading, reload }) {
   const [tab, setTab]         = useState("friends"); // friends | requests | find
   const [query, setQuery]     = useState("");
   const [results, setResults] = useState([]);
