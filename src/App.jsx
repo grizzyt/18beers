@@ -270,7 +270,7 @@ function AuthScreen() {
 }
 
 // ── Bar Page (full-screen) ────────────────────────────────────────────────────
-function BarPage({ barName, placeId, laws, currentUser, location, onBack }) {
+function BarPage({ barName, placeId, laws, currentUser, location, onBack, onPostTap }) {
   const [posts, setPosts]       = useState([]);
   const [loading, setLoading]   = useState(true);
   const [sortBy, setSortBy]     = useState("likes"); // "likes" | "recent"
@@ -393,8 +393,7 @@ function BarPage({ barName, placeId, laws, currentUser, location, onBack }) {
             </button>
           </div>
         ) : sorted.map(post=>(
-          <BarPostCard key={post.id} post={post} currentUser={currentUser}
-            onUpdate={updated=>setPosts(prev=>prev.map(p=>p.id===updated.id?updated:p))}/>
+          <BarPostCard key={post.id} post={post} currentUser={currentUser} onPostTap={onPostTap}/>
         ))}
       </div>
 
@@ -546,12 +545,11 @@ function PostActions({ post, currentUser, showComments, onToggleComments }) {
 }
 
 // ── Bar post card (used inside BarPage) ───────────────────────────────────────
-function BarPostCard({ post, currentUser, onUpdate }) {
-  const [showComments, setShowComments] = useState(false);
-
+function BarPostCard({ post, currentUser, onPostTap }) {
   return (
-    <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,
-      padding:14,marginBottom:11}}>
+    <div onClick={()=>onPostTap?.(post)}
+      style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,
+        padding:14,marginBottom:11,cursor:"pointer"}}>
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
         <InitialsAvatar name={post.display_name} size={38}/>
         <div style={{flex:1}}>
@@ -572,29 +570,118 @@ function BarPostCard({ post, currentUser, onUpdate }) {
 
       {post.note&&<p style={{color:C.cream,fontSize:13,margin:"0 0 10px",lineHeight:1.5}}>{post.note}</p>}
 
-      <PostActions post={post} currentUser={currentUser}
-        showComments={showComments} onToggleComments={()=>setShowComments(s=>!s)}/>
-      {showComments && <CommentThread postId={post.id} currentUser={currentUser}/>}
+      <div onClick={e=>e.stopPropagation()}>
+        <PostActions post={post} currentUser={currentUser}
+          showComments={false} onToggleComments={()=>onPostTap?.(post)}/>
+      </div>
     </div>
   );
 }
 
-// ── Feed card (with tappable bar name + real likes + comments) ───────────────
-function FeedCard({ post, currentUser, onBarTap }) {
-  const [showComments, setShowComments] = useState(false);
+
+// ── Post detail page ──────────────────────────────────────────────────────────
+function PostPage({ post, currentUser, onBack, onBarTap }) {
   const laws = post.state ? STATE_LAWS[post.state] : null;
 
   return (
-    <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:14,marginBottom:11}}>
+    <div style={{position:"fixed",inset:0,zIndex:160,background:C.bg,
+      display:"flex",flexDirection:"column",
+      fontFamily:"'Inter',-apple-system,sans-serif"}}>
+
+      {/* Header */}
+      <div style={{background:C.card,borderBottom:`1px solid ${C.border}`,
+        padding:"14px 16px",display:"flex",alignItems:"center",gap:12,
+        position:"sticky",top:0,zIndex:10}}>
+        <button onClick={onBack} style={{background:"none",border:"none",
+          color:C.amber,fontSize:22,cursor:"pointer",padding:0,lineHeight:1}}>‹</button>
+        <div style={{color:C.cream,fontWeight:800,fontSize:16}}>Post</div>
+      </div>
+
+      <div style={{flex:1,overflowY:"auto",padding:"14px 14px 40px"}}>
+        {/* Post body */}
+        <div style={{background:C.card,border:`1px solid ${C.border}`,
+          borderRadius:14,padding:16,marginBottom:14}}>
+
+          {/* Author row */}
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+            <InitialsAvatar name={post.display_name} size={44}/>
+            <div style={{flex:1}}>
+              <div style={{color:C.cream,fontWeight:800,fontSize:15}}>{post.display_name||"Someone"}</div>
+              <div style={{marginTop:3}}>
+                <button onClick={()=>onBarTap?.(post)}
+                  style={{background:"none",border:"none",padding:0,cursor:"pointer",
+                    color:C.amber,fontSize:12,fontWeight:600,textDecoration:"underline",
+                    textDecorationColor:C.amber+"66",textUnderlineOffset:2}}>
+                  📍 {post.bar_name}
+                </button>
+                <span style={{color:C.muted,fontSize:12}}>
+                  {post.city?` · ${post.city}`:""}
+                  {post.state?`, ${post.state}`:""}
+                </span>
+              </div>
+              <div style={{color:C.muted,fontSize:11,marginTop:2}}>{timeAgo(post.created_at)}</div>
+            </div>
+          </div>
+
+          {/* Beer block */}
+          <div style={{background:"#161208",borderRadius:12,padding:"12px 14px",
+            marginBottom:12,border:`1px solid ${C.border}`}}>
+            <div style={{display:"flex",alignItems:"center",gap:12}}>
+              <span style={{fontSize:32}}>🍺</span>
+              <div>
+                <div style={{color:C.amber,fontWeight:800,fontSize:17}}>{post.beer}</div>
+                <StarRow value={post.rating}/>
+              </div>
+              {post.to_go&&<span style={{marginLeft:"auto",fontSize:11,...pill(C.green)}}>🥡 To-go</span>}
+            </div>
+          </div>
+
+          {/* Note */}
+          {post.note&&(
+            <p style={{color:C.cream,fontSize:15,margin:"0 0 12px",lineHeight:1.6}}>{post.note}</p>
+          )}
+
+          {/* Law badges */}
+          {laws&&(
+            <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:12}}>
+              {!laws.happyHour&&<span style={{fontSize:10,fontWeight:700,...pill(C.red)}}>🚫 No HH in {post.state}</span>}
+              {laws.toGo==="permanent"&&<span style={{fontSize:10,fontWeight:700,...pill(C.green)}}>🥡 To-go OK</span>}
+              {laws.delivery&&<span style={{fontSize:10,fontWeight:700,...pill(C.blue)}}>🛵 Delivery</span>}
+            </div>
+          )}
+
+          {/* Likes + comment count */}
+          <PostActions post={post} currentUser={currentUser}
+            showComments={true} onToggleComments={()=>{}}/>
+        </div>
+
+        {/* Comments section */}
+        <div style={{color:C.muted,fontSize:11,fontWeight:700,letterSpacing:".06em",
+          textTransform:"uppercase",marginBottom:10}}>Comments</div>
+        <CommentThread postId={post.id} currentUser={currentUser} alwaysOpen/>
+      </div>
+    </div>
+  );
+}
+
+// ── Feed card — tap to open PostPage ─────────────────────────────────────────
+function FeedCard({ post, currentUser, onBarTap, onPostTap }) {
+  const laws = post.state ? STATE_LAWS[post.state] : null;
+
+  return (
+    <div onClick={()=>onPostTap?.(post)}
+      style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,
+        padding:14,marginBottom:11,cursor:"pointer"}}>
+
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
         <InitialsAvatar name={post.display_name} size={40}/>
         <div style={{flex:1}}>
           <span style={{color:C.cream,fontWeight:700,fontSize:14}}>{post.display_name||"Someone"}</span>
           <div style={{marginTop:2}}>
-            <button onClick={()=>onBarTap?.(post)} style={{
-              background:"none",border:"none",padding:0,cursor:"pointer",
-              color:C.amber,fontSize:11,fontWeight:600,textDecoration:"underline",
-              textDecorationColor:C.amber+"66",textUnderlineOffset:2}}>
+            <button onClick={e=>{e.stopPropagation();onBarTap?.(post);}}
+              style={{background:"none",border:"none",padding:0,cursor:"pointer",
+                color:C.amber,fontSize:11,fontWeight:600,textDecoration:"underline",
+                textDecorationColor:C.amber+"66",textUnderlineOffset:2}}>
               📍 {post.bar_name}
             </button>
             <span style={{color:C.muted,fontSize:11}}>
@@ -628,9 +715,11 @@ function FeedCard({ post, currentUser, onBarTap }) {
         </div>
       )}
 
-      <PostActions post={post} currentUser={currentUser}
-        showComments={showComments} onToggleComments={()=>setShowComments(s=>!s)}/>
-      {showComments && <CommentThread postId={post.id} currentUser={currentUser}/>}
+      {/* Action row — stop propagation so taps don't open post page */}
+      <div onClick={e=>e.stopPropagation()}>
+        <PostActions post={post} currentUser={currentUser}
+          showComments={false} onToggleComments={()=>onPostTap?.(post)}/>
+      </div>
     </div>
   );
 }
@@ -772,7 +861,7 @@ async function seedDemoPosts() {
 }
 
 // ── Feed tab ──────────────────────────────────────────────────────────────────
-function FeedTab({ location, laws, currentUser, onCheckIn, onBarTap }) {
+function FeedTab({ location, laws, currentUser, onCheckIn, onBarTap, onPostTap }) {
   const [posts,setPosts]   = useState([]);
   const [loading,setLoading] = useState(true);
 
@@ -818,7 +907,7 @@ function FeedTab({ location, laws, currentUser, onCheckIn, onBarTap }) {
             fontWeight:800,fontSize:14,cursor:"pointer"}}>Check In Now 🍺</button>
         </div>
       ) : posts.map(p=>(
-        <FeedCard key={p.id} post={p} currentUser={currentUser} onBarTap={onBarTap}/>
+        <FeedCard key={p.id} post={p} currentUser={currentUser} onBarTap={onBarTap} onPostTap={onPostTap}/>
       ))}
     </div>
   );
@@ -1106,6 +1195,7 @@ export default function App() {
   const [showPicker,setShowPicker]   = useState(false);
   const [location,setLocation]       = useState(null);
   const [barPage,setBarPage]         = useState(null); // { bar_name, place_id, state }
+  const [postPage,setPostPage]       = useState(null); // full post object
 
   const laws = location?.state ? STATE_LAWS[location.state] : null;
   const barLaws = barPage?.state ? STATE_LAWS[barPage.state] : laws;
@@ -1173,7 +1263,7 @@ export default function App() {
       </div>
 
       <div style={{flex:1,padding:"13px 13px 80px",overflowY:"auto"}}>
-        {tab==="feed"    && <FeedTab location={location} laws={laws} currentUser={session.user} onCheckIn={()=>setShowModal(true)} onBarTap={handleBarTap}/>}
+        {tab==="feed"    && <FeedTab location={location} laws={laws} currentUser={session.user} onCheckIn={()=>setShowModal(true)} onBarTap={handleBarTap} onPostTap={p=>setPostPage(p)}/>}
         {tab==="nearby"  && <NearbyTab location={location} laws={laws} currentUser={session.user} onBarTap={handleBarTap}/>}
         {tab==="profile" && <ProfileTab currentUser={session.user} onLogout={()=>supabase.auth.signOut()} onBarTap={handleBarTap}/>}
       </div>
@@ -1192,12 +1282,21 @@ export default function App() {
         ))}
       </div>
 
+      {/* Post page */}
+      {postPage && (
+        <PostPage
+          post={postPage} currentUser={session.user}
+          onBack={()=>setPostPage(null)}
+          onBarTap={p=>{ setPostPage(null); handleBarTap(p); }}/>
+      )}
+
       {/* Bar page — slides over everything */}
       {barPage && (
         <BarPage
           barName={barPage.bar_name} placeId={barPage.place_id}
           laws={barLaws} currentUser={session.user} location={location}
-          onBack={()=>setBarPage(null)}/>
+          onBack={()=>setBarPage(null)}
+          onPostTap={p=>setPostPage(p)}/>
       )}
 
       {showModal && (
