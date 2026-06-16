@@ -726,15 +726,20 @@ function FeedCard({ post, currentUser, onBarTap, onPostTap }) {
 
 // ── Check-in modal ────────────────────────────────────────────────────────────
 function CheckInModal({ onClose, onPost, location, laws, currentUser, preselectedBar="", preselectedPlaceId=null }) {
-  const [beer,setBeer]     = useState("");
-  const [rating,setRating] = useState(0);
-  const [bar,setBar]       = useState(preselectedBar);
-  const [placeId,setPlaceId] = useState(preselectedPlaceId);
-  const [note,setNote]     = useState("");
-  const [toGo,setToGo]     = useState(false);
-  const [saving,setSaving] = useState(false);
-  const [posted,setPosted] = useState(false);
+  const [beer,setBeer]         = useState("");
+  const [rating,setRating]     = useState(0);
+  const [bar,setBar]           = useState(preselectedBar);
+  const [placeId,setPlaceId]   = useState(preselectedPlaceId);
+  const [note,setNote]         = useState("");
+  const [toGo,setToGo]         = useState(false);
+  const [tagged,setTagged]     = useState([]);
+  const [saving,setSaving]     = useState(false);
+  const [posted,setPosted]     = useState(false);
   const barInputRef = useRef(null);
+
+  function toggleTag(friend) {
+    setTagged(t => t.some(f=>f.id===friend.id) ? t.filter(f=>f.id!==friend.id) : [...t, friend]);
+  }
 
   useEffect(() => {
     if (!window.google?.maps?.places || !barInputRef.current || preselectedBar) return;
@@ -760,6 +765,11 @@ function CheckInModal({ onClose, onPost, location, laws, currentUser, preselecte
       note:note||null, to_go:toGo, likes:0,
     };
     const { data, error } = await supabase.from("posts").insert(entry).select().single();
+    if (!error && data && tagged.length > 0) {
+      await supabase.from("post_tags").insert(
+        tagged.map(f => ({ post_id:data.id, user_id:f.id, display_name:f.display_name }))
+      );
+    }
     setSaving(false);
     if (!error&&data) { setPosted(true); setTimeout(()=>{ onPost(data); onClose(); },1000); }
   }
@@ -787,6 +797,8 @@ function CheckInModal({ onClose, onPost, location, laws, currentUser, preselecte
                   placeholder="Search for a bar…" style={inp(!!bar)}/>
               </Field>
             )}
+            <FriendPicker currentUser={currentUser} selected={tagged} onToggle={toggleTag}/>
+
             <Field label="Note (optional)">
               <textarea value={note} onChange={e=>setNote(e.target.value)}
                 placeholder="How's the vibe?" rows={2}
@@ -861,9 +873,10 @@ async function seedDemoPosts() {
 }
 
 // ── Feed tab ──────────────────────────────────────────────────────────────────
-function FeedTab({ location, laws, currentUser, onCheckIn, onBarTap, onPostTap }) {
-  const [posts,setPosts]   = useState([]);
+function FeedTab({ location, laws, currentUser, onCheckIn, onBarTap, onPostTap, friendIds }) {
+  const [posts,setPosts]     = useState([]);
   const [loading,setLoading] = useState(true);
+  const [filter,setFilter]   = useState("all"); // "all" | "friends" 
 
   useEffect(() => {
     supabase.from("posts").select("*").order("created_at",{ascending:false}).limit(50)
@@ -894,8 +907,23 @@ function FeedTab({ location, laws, currentUser, onCheckIn, onBarTap, onPostTap }
           <LawBadges laws={laws}/>
         </div>
       )}
+      {/* Friends / All toggle */}
+      <div style={{display:"flex",background:C.card,borderRadius:10,padding:3,
+        border:`1px solid ${C.border}`,marginBottom:12}}>
+        {[["all","🌍 Everyone"],["friends","🍻 Friends"]].map(([k,label])=>(
+          <button key={k} onClick={()=>setFilter(k)}
+            style={{flex:1,padding:"7px 0",border:"none",borderRadius:8,cursor:"pointer",
+              fontWeight:700,fontSize:12,transition:"all .2s",
+              background:filter===k?C.amber:"none",
+              color:filter===k?"#141210":C.muted}}>
+            {label}
+          </button>
+        ))}
+      </div>
       <div style={{color:C.muted,fontSize:11,fontWeight:700,letterSpacing:".06em",
-        textTransform:"uppercase",marginBottom:10}}>Latest Check-ins</div>
+        textTransform:"uppercase",marginBottom:10}}>
+        {filter==="friends" ? "Friends' Check-ins" : "Latest Check-ins"}
+      </div>
       {loading ? (
         <div style={{textAlign:"center",padding:40,color:C.muted}}>Loading…</div>
       ) : posts.length===0 ? (
@@ -1059,9 +1087,10 @@ function NearbyTab({ location, laws, currentUser, onBarTap }) {
 }
 
 // ── Profile tab ───────────────────────────────────────────────────────────────
-function ProfileTab({ currentUser, onLogout, onBarTap }) {
-  const [posts,setPosts]   = useState([]);
+function ProfileTab({ currentUser, onLogout, onBarTap, onFriends }) {
+  const [posts,setPosts]     = useState([]);
   const [loading,setLoading] = useState(true);
+  const [filter,setFilter]   = useState("all"); // "all" | "friends" 
   const displayName = currentUser?.user_metadata?.display_name || currentUser?.email?.split("@")[0]||"You";
 
   useEffect(()=>{
@@ -1095,9 +1124,15 @@ function ProfileTab({ currentUser, onLogout, onBarTap }) {
             </div>
           ))}
         </div>
-        <button onClick={onLogout} style={{marginTop:14,background:"none",
-          border:`1px solid ${C.border}`,borderRadius:8,padding:"5px 18px",
-          color:C.muted,fontSize:12,cursor:"pointer"}}>Sign Out</button>
+        <div style={{display:"flex",gap:8,justifyContent:"center",marginTop:14}}>
+          <button onClick={onFriends}
+            style={{background:`linear-gradient(135deg,${C.amber},${C.amberLt})`,
+              color:"#141210",border:"none",borderRadius:8,padding:"7px 16px",
+              fontWeight:800,fontSize:12,cursor:"pointer"}}>🍻 Friends</button>
+          <button onClick={onLogout} style={{background:"none",
+            border:`1px solid ${C.border}`,borderRadius:8,padding:"7px 16px",
+            color:C.muted,fontSize:12,cursor:"pointer"}}>Sign Out</button>
+        </div>
       </div>
       <div style={{color:C.muted,fontSize:11,fontWeight:700,letterSpacing:".06em",
         textTransform:"uppercase",marginBottom:9}}>Badges</div>
@@ -1194,8 +1229,9 @@ export default function App() {
   const [showModal,setShowModal]     = useState(false);
   const [showPicker,setShowPicker]   = useState(false);
   const [location,setLocation]       = useState(null);
-  const [barPage,setBarPage]         = useState(null); // { bar_name, place_id, state }
-  const [postPage,setPostPage]       = useState(null); // full post object
+  const [barPage,setBarPage]         = useState(null);
+  const [postPage,setPostPage]       = useState(null);
+  const [friendsPage,setFriendsPage] = useState(false);
 
   const laws = location?.state ? STATE_LAWS[location.state] : null;
   const barLaws = barPage?.state ? STATE_LAWS[barPage.state] : laws;
@@ -1221,6 +1257,9 @@ export default function App() {
   },[]);
 
   useEffect(()=>{ if(session) requestGPS(); },[session]);
+
+  const { friends, incoming, reload: reloadFriends } = useFriends(session?.user);
+  const friendIds = new Set(friends.map(f => f.id));
 
   function handleBarTap(post) {
     setBarPage({ bar_name: post.bar_name, place_id: post.place_id||null, state: post.state||location?.state });
@@ -1263,9 +1302,9 @@ export default function App() {
       </div>
 
       <div style={{flex:1,padding:"13px 13px 80px",overflowY:"auto"}}>
-        {tab==="feed"    && <FeedTab location={location} laws={laws} currentUser={session.user} onCheckIn={()=>setShowModal(true)} onBarTap={handleBarTap} onPostTap={p=>setPostPage(p)}/>}
+        {tab==="feed"    && <FeedTab location={location} laws={laws} currentUser={session.user} onCheckIn={()=>setShowModal(true)} onBarTap={handleBarTap} onPostTap={p=>setPostPage(p)} friendIds={friendIds}/>}
         {tab==="nearby"  && <NearbyTab location={location} laws={laws} currentUser={session.user} onBarTap={handleBarTap}/>}
-        {tab==="profile" && <ProfileTab currentUser={session.user} onLogout={()=>supabase.auth.signOut()} onBarTap={handleBarTap}/>}
+        {tab==="profile" && <ProfileTab currentUser={session.user} onLogout={()=>supabase.auth.signOut()} onBarTap={handleBarTap} onFriends={()=>setFriendsPage(true)}/>}
       </div>
 
       <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",
@@ -1275,12 +1314,24 @@ export default function App() {
           <button key={t.key} onClick={()=>setTab(t.key)}
             style={{background:"none",border:"none",cursor:"pointer",
               display:"flex",flexDirection:"column",alignItems:"center",gap:3,padding:"0 18px"}}>
-            <span style={{fontSize:20,opacity:tab===t.key?1:.4}}>{t.icon}</span>
+            <div style={{position:"relative",display:"inline-block"}}>
+              <span style={{fontSize:20,opacity:tab===t.key?1:.4}}>{t.icon}</span>
+              {t.key==="profile" && incoming.length>0 && (
+                <div style={{position:"absolute",top:-2,right:-4,background:C.red,color:"#fff",
+                  borderRadius:"50%",width:14,height:14,display:"flex",alignItems:"center",
+                  justifyContent:"center",fontSize:9,fontWeight:800}}>{incoming.length}</div>
+              )}
+            </div>
             <span style={{fontSize:10,fontWeight:700,letterSpacing:".04em",textTransform:"uppercase",
               color:tab===t.key?C.amber:C.muted}}>{t.label}</span>
           </button>
         ))}
       </div>
+
+      {/* Friends page */}
+      {friendsPage && (
+        <FriendsPage currentUser={session.user} onBack={()=>{ setFriendsPage(false); reloadFriends(); }}/>
+      )}
 
       {/* Post page */}
       {postPage && (
@@ -1308,6 +1359,339 @@ export default function App() {
           onSelect={code=>{setLocation(l=>({...l,state:code,city:""}));setShowPicker(false);}}
           onClose={()=>setShowPicker(false)}/>
       )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FRIENDS SYSTEM
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ── Friends hook ──────────────────────────────────────────────────────────────
+function useFriends(currentUser) {
+  const [friends, setFriends]         = useState([]); // accepted
+  const [incoming, setIncoming]       = useState([]); // pending requests TO me
+  const [outgoing, setOutgoing]       = useState([]); // pending requests FROM me
+  const [loading, setLoading]         = useState(true);
+
+  const load = useCallback(async () => {
+    if (!currentUser) return;
+    const { data } = await supabase
+      .from("friendships")
+      .select("*, requester:requester_id(id,display_name:display_name), addressee:addressee_id(id,display_name:display_name)")
+      .or(`requester_id.eq.${currentUser.id},addressee_id.eq.${currentUser.id}`);
+
+    const rows = data || [];
+    const accepted = rows.filter(r => r.status === "accepted");
+    const pend_in  = rows.filter(r => r.status === "pending" && r.addressee_id === currentUser.id);
+    const pend_out = rows.filter(r => r.status === "pending" && r.requester_id === currentUser.id);
+
+    // Resolve the "other person" for each row
+    const resolve = (row) => {
+      const isRequester = row.requester_id === currentUser.id;
+      return {
+        friendshipId: row.id,
+        id:           isRequester ? row.addressee_id : row.requester_id,
+        display_name: isRequester ? row.addressee?.display_name : row.requester?.display_name,
+        status:       row.status,
+      };
+    };
+
+    setFriends(accepted.map(resolve));
+    setIncoming(pend_in.map(r => ({ friendshipId:r.id, id:r.requester_id, display_name:r.requester?.display_name })));
+    setOutgoing(pend_out.map(r => ({ friendshipId:r.id, id:r.addressee_id, display_name:r.addressee?.display_name })));
+    setLoading(false);
+  }, [currentUser?.id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  return { friends, incoming, outgoing, loading, reload: load };
+}
+
+// ── User search ───────────────────────────────────────────────────────────────
+async function searchUsers(query, currentUserId) {
+  const { data } = await supabase
+    .from("profiles")
+    .select("id, display_name")
+    .ilike("display_name", `%${query}%`)
+    .neq("id", currentUserId)
+    .limit(10);
+  return data || [];
+}
+
+// ── Friends page ──────────────────────────────────────────────────────────────
+function FriendsPage({ currentUser, onBack }) {
+  const { friends, incoming, outgoing, loading, reload } = useFriends(currentUser);
+  const [tab, setTab]         = useState("friends"); // friends | requests | find
+  const [query, setQuery]     = useState("");
+  const [results, setResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [actionLoading, setActionLoading] = useState({});
+
+  const friendIds = new Set(friends.map(f => f.id));
+  const outgoingIds = new Set(outgoing.map(f => f.id));
+
+  async function handleSearch(q) {
+    setQuery(q);
+    if (q.trim().length < 2) { setResults([]); return; }
+    setSearching(true);
+    const users = await searchUsers(q, currentUser.id);
+    setResults(users);
+    setSearching(false);
+  }
+
+  async function sendRequest(userId) {
+    setActionLoading(l => ({...l, [userId]:true}));
+    await supabase.from("friendships").insert({
+      requester_id: currentUser.id,
+      addressee_id: userId,
+      status: "pending",
+    });
+    await reload();
+    setActionLoading(l => ({...l, [userId]:false}));
+  }
+
+  async function acceptRequest(friendshipId, userId) {
+    setActionLoading(l => ({...l, [userId]:true}));
+    await supabase.from("friendships").update({ status:"accepted" }).eq("id", friendshipId);
+    await reload();
+    setActionLoading(l => ({...l, [userId]:false}));
+  }
+
+  async function declineRequest(friendshipId, userId) {
+    setActionLoading(l => ({...l, [userId]:true}));
+    await supabase.from("friendships").update({ status:"declined" }).eq("id", friendshipId);
+    await reload();
+    setActionLoading(l => ({...l, [userId]:false}));
+  }
+
+  async function removeFriend(friendshipId, userId) {
+    setActionLoading(l => ({...l, [userId]:true}));
+    await supabase.from("friendships").delete().eq("id", friendshipId);
+    await reload();
+    setActionLoading(l => ({...l, [userId]:false}));
+  }
+
+  const tabs = [
+    { key:"friends",  label:`Friends${friends.length ? ` (${friends.length})` : ""}` },
+    { key:"requests", label:`Requests${incoming.length ? ` (${incoming.length})` : ""}` },
+    { key:"find",     label:"Find Friends" },
+  ];
+
+  return (
+    <div style={{position:"fixed",inset:0,zIndex:160,background:C.bg,
+      display:"flex",flexDirection:"column",fontFamily:"'Inter',-apple-system,sans-serif"}}>
+
+      {/* Header */}
+      <div style={{background:C.card,borderBottom:`1px solid ${C.border}`,
+        padding:"14px 16px",display:"flex",alignItems:"center",gap:12,
+        position:"sticky",top:0,zIndex:10}}>
+        <button onClick={onBack} style={{background:"none",border:"none",
+          color:C.amber,fontSize:22,cursor:"pointer",padding:0,lineHeight:1}}>‹</button>
+        <div style={{color:C.cream,fontWeight:800,fontSize:16}}>Friends</div>
+        {incoming.length > 0 && (
+          <div style={{marginLeft:"auto",background:C.red,color:"#fff",borderRadius:"50%",
+            width:20,height:20,display:"flex",alignItems:"center",justifyContent:"center",
+            fontSize:11,fontWeight:800}}>{incoming.length}</div>
+        )}
+      </div>
+
+      {/* Tab bar */}
+      <div style={{display:"flex",background:C.card,borderBottom:`1px solid ${C.border}`}}>
+        {tabs.map(t => (
+          <button key={t.key} onClick={()=>setTab(t.key)}
+            style={{flex:1,padding:"10px 4px",border:"none",cursor:"pointer",
+              background:"none",fontSize:12,fontWeight:700,transition:"all .15s",
+              color:tab===t.key?C.amber:C.muted,
+              borderBottom:`2px solid ${tab===t.key?C.amber:"transparent"}`}}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      <div style={{flex:1,overflowY:"auto",padding:"14px 14px 30px"}}>
+
+        {/* Friends list */}
+        {tab === "friends" && (
+          loading ? <div style={{textAlign:"center",padding:40,color:C.muted}}>Loading…</div>
+          : friends.length === 0 ? (
+            <div style={{textAlign:"center",padding:"40px 0"}}>
+              <div style={{fontSize:40,marginBottom:10}}>🍻</div>
+              <div style={{color:C.cream,fontWeight:700,marginBottom:6}}>No friends yet</div>
+              <div style={{color:C.muted,fontSize:13,marginBottom:16}}>Find people to drink with!</div>
+              <button onClick={()=>setTab("find")}
+                style={{background:`linear-gradient(135deg,${C.amber},${C.amberLt})`,
+                  color:"#141210",border:"none",borderRadius:10,padding:"10px 20px",
+                  fontWeight:800,fontSize:14,cursor:"pointer"}}>Find Friends</button>
+            </div>
+          ) : friends.map(f => (
+            <div key={f.id} style={{background:C.card,border:`1px solid ${C.border}`,
+              borderRadius:12,padding:"12px 14px",marginBottom:9,
+              display:"flex",alignItems:"center",gap:12}}>
+              <InitialsAvatar name={f.display_name} size={40}/>
+              <div style={{flex:1}}>
+                <div style={{color:C.cream,fontWeight:700,fontSize:14}}>{f.display_name||"Unknown"}</div>
+                <div style={{color:C.muted,fontSize:11,marginTop:2}}>🍺 Friend</div>
+              </div>
+              <button onClick={()=>removeFriend(f.friendshipId, f.id)}
+                disabled={actionLoading[f.id]}
+                style={{background:"none",border:`1px solid ${C.border}`,borderRadius:8,
+                  padding:"5px 11px",color:C.muted,fontSize:12,cursor:"pointer"}}>
+                {actionLoading[f.id] ? "…" : "Remove"}
+              </button>
+            </div>
+          ))
+        )}
+
+        {/* Requests */}
+        {tab === "requests" && (
+          <div>
+            {incoming.length > 0 && (
+              <>
+                <div style={{color:C.muted,fontSize:11,fontWeight:700,letterSpacing:".06em",
+                  textTransform:"uppercase",marginBottom:10}}>Incoming</div>
+                {incoming.map(f => (
+                  <div key={f.id} style={{background:C.card,border:`1px solid ${C.border}`,
+                    borderRadius:12,padding:"12px 14px",marginBottom:9,
+                    display:"flex",alignItems:"center",gap:12}}>
+                    <InitialsAvatar name={f.display_name} size={40}/>
+                    <div style={{flex:1}}>
+                      <div style={{color:C.cream,fontWeight:700,fontSize:14}}>{f.display_name||"Someone"}</div>
+                      <div style={{color:C.muted,fontSize:11,marginTop:2}}>wants to be friends</div>
+                    </div>
+                    <div style={{display:"flex",gap:6}}>
+                      <button onClick={()=>acceptRequest(f.friendshipId, f.id)}
+                        disabled={actionLoading[f.id]}
+                        style={{background:`linear-gradient(135deg,${C.amber},${C.amberLt})`,
+                          color:"#141210",border:"none",borderRadius:8,
+                          padding:"6px 12px",fontSize:12,fontWeight:800,cursor:"pointer"}}>
+                        {actionLoading[f.id] ? "…" : "Accept"}
+                      </button>
+                      <button onClick={()=>declineRequest(f.friendshipId, f.id)}
+                        disabled={actionLoading[f.id]}
+                        style={{background:"none",border:`1px solid ${C.border}`,borderRadius:8,
+                          padding:"6px 10px",color:C.muted,fontSize:12,cursor:"pointer"}}>
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
+
+            {outgoing.length > 0 && (
+              <>
+                <div style={{color:C.muted,fontSize:11,fontWeight:700,letterSpacing:".06em",
+                  textTransform:"uppercase",marginBottom:10,marginTop:incoming.length?16:0}}>Sent</div>
+                {outgoing.map(f => (
+                  <div key={f.id} style={{background:C.card,border:`1px solid ${C.border}`,
+                    borderRadius:12,padding:"12px 14px",marginBottom:9,
+                    display:"flex",alignItems:"center",gap:12}}>
+                    <InitialsAvatar name={f.display_name} size={40}/>
+                    <div style={{flex:1}}>
+                      <div style={{color:C.cream,fontWeight:700,fontSize:14}}>{f.display_name||"Someone"}</div>
+                      <div style={{color:C.muted,fontSize:11,marginTop:2}}>Request pending</div>
+                    </div>
+                    <button onClick={()=>removeFriend(f.friendshipId, f.id)}
+                      disabled={actionLoading[f.id]}
+                      style={{background:"none",border:`1px solid ${C.border}`,borderRadius:8,
+                        padding:"5px 11px",color:C.muted,fontSize:12,cursor:"pointer"}}>
+                      {actionLoading[f.id] ? "…" : "Cancel"}
+                    </button>
+                  </div>
+                ))}
+              </>
+            )}
+
+            {incoming.length === 0 && outgoing.length === 0 && (
+              <div style={{textAlign:"center",padding:"40px 0"}}>
+                <div style={{fontSize:40,marginBottom:10}}>📭</div>
+                <div style={{color:C.muted,fontSize:13}}>No pending requests</div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Find friends */}
+        {tab === "find" && (
+          <div>
+            <input value={query} onChange={e=>handleSearch(e.target.value)}
+              placeholder="Search by name…"
+              style={{...inp(!!query),marginBottom:14}}/>
+
+            {searching && <div style={{color:C.muted,fontSize:13,textAlign:"center",padding:20}}>Searching…</div>}
+
+            {results.map(u => {
+              const isFriend   = friendIds.has(u.id);
+              const isOutgoing = outgoingIds.has(u.id);
+              return (
+                <div key={u.id} style={{background:C.card,border:`1px solid ${C.border}`,
+                  borderRadius:12,padding:"12px 14px",marginBottom:9,
+                  display:"flex",alignItems:"center",gap:12}}>
+                  <InitialsAvatar name={u.display_name} size={40}/>
+                  <div style={{flex:1}}>
+                    <div style={{color:C.cream,fontWeight:700,fontSize:14}}>{u.display_name}</div>
+                  </div>
+                  {isFriend ? (
+                    <span style={{fontSize:11,...pill(C.green)}}>🍻 Friends</span>
+                  ) : isOutgoing ? (
+                    <span style={{fontSize:11,...pill(C.muted)}}>Pending</span>
+                  ) : (
+                    <button onClick={()=>sendRequest(u.id)}
+                      disabled={actionLoading[u.id]}
+                      style={{background:`linear-gradient(135deg,${C.amber},${C.amberLt})`,
+                        color:"#141210",border:"none",borderRadius:8,
+                        padding:"6px 12px",fontSize:12,fontWeight:800,cursor:"pointer"}}>
+                      {actionLoading[u.id] ? "…" : "Add Friend"}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+
+            {query.length >= 2 && !searching && results.length === 0 && (
+              <div style={{textAlign:"center",padding:"30px 0",color:C.muted,fontSize:13}}>
+                No users found for "{query}"
+              </div>
+            )}
+            {query.length < 2 && (
+              <div style={{textAlign:"center",padding:"30px 0",color:C.muted,fontSize:13}}>
+                Type at least 2 characters to search
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Tag friends picker (in check-in modal) ────────────────────────────────────
+function FriendPicker({ currentUser, selected, onToggle }) {
+  const { friends } = useFriends(currentUser);
+  if (friends.length === 0) return null;
+  return (
+    <div style={{marginBottom:14}}>
+      <div style={{color:C.muted,fontSize:11,fontWeight:700,letterSpacing:".06em",
+        textTransform:"uppercase",marginBottom:8}}>Tag Friends</div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+        {friends.map(f => {
+          const isSelected = selected.some(s => s.id === f.id);
+          return (
+            <button key={f.id} onClick={()=>onToggle(f)}
+              style={{display:"flex",alignItems:"center",gap:6,
+                background: isSelected ? C.amber+"22" : "#161208",
+                border:`1px solid ${isSelected ? C.amber : C.border}`,
+                borderRadius:20,padding:"5px 10px 5px 6px",cursor:"pointer"}}>
+              <InitialsAvatar name={f.display_name} size={22}/>
+              <span style={{color:isSelected?C.amber:C.cream,fontSize:12,fontWeight:600}}>
+                {f.display_name}
+              </span>
+              {isSelected && <span style={{color:C.amber,fontSize:12}}>✓</span>}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

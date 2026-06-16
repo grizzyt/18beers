@@ -129,3 +129,41 @@ create or replace function public.decrement_likes(post_id uuid)
 returns void as $$
   update public.posts set likes = greatest(likes - 1, 0) where id = post_id;
 $$ language sql security definer;
+
+-- ── Friends system ────────────────────────────────────────────────────────────
+
+-- Friends / follow requests table
+create table if not exists public.friendships (
+  id uuid default gen_random_uuid() primary key,
+  requester_id uuid references auth.users on delete cascade not null,
+  addressee_id uuid references auth.users on delete cascade not null,
+  status text check (status in ('pending','accepted','declined')) default 'pending',
+  created_at timestamp with time zone default timezone('utc', now()),
+  unique(requester_id, addressee_id)
+);
+
+alter table public.friendships enable row level security;
+create policy "Users can see their own friendships" on public.friendships for select using (auth.uid() = requester_id or auth.uid() = addressee_id);
+create policy "Users can send friend requests" on public.friendships for insert with check (auth.uid() = requester_id);
+create policy "Users can update requests sent to them" on public.friendships for update using (auth.uid() = addressee_id);
+create policy "Users can delete their own friendships" on public.friendships for delete using (auth.uid() = requester_id or auth.uid() = addressee_id);
+
+-- Post tags — who was tagged in a post
+create table if not exists public.post_tags (
+  id uuid default gen_random_uuid() primary key,
+  post_id uuid references public.posts on delete cascade not null,
+  user_id uuid references auth.users on delete cascade not null,
+  display_name text,
+  unique(post_id, user_id)
+);
+
+alter table public.post_tags enable row level security;
+create policy "Post tags viewable by everyone" on public.post_tags for select using (true);
+create policy "Post author can tag friends" on public.post_tags for insert with check (auth.uid() in (select user_id from public.posts where id = post_id));
+create policy "Post author can remove tags" on public.post_tags for delete using (auth.uid() in (select user_id from public.posts where id = post_id));
+
+-- Make profiles searchable
+create policy "Profiles searchable by logged in users" on public.profiles for select using (auth.uid() is not null);
+
+-- Realtime for friendships
+alter publication supabase_realtime add table public.friendships;
